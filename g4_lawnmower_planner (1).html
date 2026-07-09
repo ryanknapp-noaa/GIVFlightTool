@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G-IV Lawnmower Pattern Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<style>
+  :root{
+    --bg:#0a1118;
+    --panel:#0f1922;
+    --panel-2:#142230;
+    --line:#22323f;
+    --line-dim:#1a2731;
+    --ink:#cfdbe6;
+    --ink-dim:#7d8fa0;
+    --cyan:#5fd4d6;
+    --cyan-dim:#2f5b5c;
+    --amber:#e8a13c;
+    --amber-dim:#6b5327;
+    --red:#e8574a;
+    --green:#7bc67e;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, #0f1c28 0%, transparent 60%),
+      radial-gradient(1000px 700px at 110% 10%, #0d1a22 0%, transparent 55%),
+      var(--bg);
+    color:var(--ink);
+    font-family:'IBM Plex Mono', monospace;
+    min-height:100vh;
+  }
+  .wrap{max-width:1400px;margin:0 auto;padding:22px 22px 60px;}
+
+  header{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    border-bottom:1px solid var(--line);padding-bottom:16px;margin-bottom:20px;
+    gap:16px;flex-wrap:wrap;
+  }
+  header .title-block h1{
+    font-family:'Space Grotesk',sans-serif;font-weight:700;
+    font-size:26px;letter-spacing:0.5px;margin:0;color:#eef4f8;
+  }
+  header .title-block .sub{
+    font-size:11px;letter-spacing:2px;color:var(--cyan);margin-top:4px;text-transform:uppercase;
+  }
+  header .tag{
+    font-size:11px;color:var(--ink-dim);text-align:right;line-height:1.6;
+  }
+  header .tag b{color:var(--amber);}
+
+  #alertBanner{
+    background:linear-gradient(180deg,#2a1512,#1a0e0c);border:1px solid #7a2e26;
+    border-left:4px solid var(--red);border-radius:6px;padding:14px 18px;margin-bottom:18px;
+  }
+  #alertBanner .hdr{
+    display:flex;align-items:center;gap:10px;font-family:'Space Grotesk',sans-serif;
+    font-weight:700;font-size:13px;letter-spacing:0.5px;color:#ff8a7d;margin-bottom:8px;
+  }
+  #alertBanner .hdr .dot{width:9px;height:9px;border-radius:50%;background:var(--red);
+    box-shadow:0 0 10px var(--red);flex:none;}
+  #alertBanner p{margin:0 0 8px 0;font-size:12px;color:#e9c9c4;line-height:1.6;}
+  #alertBanner ul{margin:0;padding-left:18px;font-size:12px;color:#e9c9c4;line-height:1.8;}
+  #alertBanner b{color:#fff;}
+
+  .grid{display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start;}
+  @media (max-width:980px){.grid{grid-template-columns:1fr;}}
+
+  .panel{
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    border:1px solid var(--line);border-radius:6px;padding:18px;
+  }
+  .panel h2{
+    font-family:'Space Grotesk',sans-serif;font-size:13px;letter-spacing:1.5px;
+    text-transform:uppercase;color:var(--cyan);margin:0 0 14px 0;
+    display:flex;align-items:center;gap:8px;
+  }
+  .panel h2::before{content:'';width:8px;height:8px;background:var(--cyan);
+    box-shadow:0 0 8px var(--cyan);border-radius:1px;}
+
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block;font-size:10px;letter-spacing:1.5px;color:var(--amber);
+    text-transform:uppercase;margin-bottom:5px;
+  }
+  .row2{display:grid;grid-template-columns:1fr 78px;gap:8px;}
+  .row3{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+
+  input[type=number], input[type=text], select{
+    width:100%;background:#081016;border:1px solid var(--line);
+    color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:14px;
+    padding:9px 10px;border-radius:3px;outline:none;
+  }
+  input[type=number]:focus, input[type=text]:focus, select:focus{
+    border-color:var(--cyan);box-shadow:0 0 0 2px rgba(95,212,214,0.15);
+  }
+  select{appearance:none;-webkit-appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%, var(--cyan) 50%),linear-gradient(135deg, var(--cyan) 50%,transparent 50%);
+    background-position:calc(100% - 16px) center, calc(100% - 11px) center;
+    background-size:5px 5px, 5px 5px;background-repeat:no-repeat;
+  }
+  .hint{font-size:10px;color:var(--ink-dim);margin-top:4px;letter-spacing:0.3px;}
+
+  .divider{height:1px;background:var(--line);margin:16px 0;}
+
+  .stat-line{display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px dashed var(--line-dim);}
+  .stat-line:last-child{border-bottom:none;}
+  .stat-line .k{color:var(--ink-dim);letter-spacing:0.5px;}
+  .stat-line .v{color:var(--ink);font-weight:600;}
+  .stat-line .v.hl{color:var(--amber);}
+
+  .mapbox{background:#060b10;border:1px solid var(--line);border-radius:6px;padding:10px;}
+  #leafletMap{width:100%;height:560px;border-radius:4px;background:#0a1118;}
+  .leaflet-container{background:#0a1118;font-family:'IBM Plex Mono',monospace;}
+  .leaflet-control-attribution{background:rgba(10,17,24,0.75) !important;color:var(--ink-dim) !important;font-size:9px !important;}
+  .leaflet-control-attribution a{color:var(--cyan) !important;}
+  .leaflet-control-zoom a{background:#101a26 !important;color:var(--cyan) !important;border-color:var(--line) !important;}
+  .leaflet-control-zoom a:hover{background:#16212f !important;}
+  .wp-icon{
+    display:flex;align-items:center;justify-content:center;
+    width:22px;height:22px;border-radius:50%;background:#0a1118;
+    border:1.5px solid var(--cyan);color:var(--ink);font-size:10px;font-weight:600;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .wp-icon.dep, .wp-icon.arr{border-color:var(--amber);color:var(--amber);}
+  .drop-icon{
+    width:10px;height:10px;border-radius:50%;background:#f2437a;
+    border:1.5px solid #0a1118;box-shadow:0 0 5px rgba(242,67,122,0.8);
+  }
+  .center-icon{
+    width:16px;height:16px;border-radius:50%;background:var(--red);
+    border:2px solid #0a1118;box-shadow:0 0 10px var(--red);
+  }
+  .leaflet-tooltip.mono-tip{
+    background:#0f1922;border:1px solid var(--line);color:var(--ink);
+    font-family:'IBM Plex Mono',monospace;font-size:11px;border-radius:3px;
+  }
+  .leaflet-tooltip.mono-tip::before{border-top-color:var(--line);}
+  .legend-box{
+    position:absolute;bottom:10px;right:10px;background:rgba(10,17,24,0.88);
+    border:1px solid var(--line);border-radius:5px;padding:8px 10px;font-size:10px;
+    color:var(--ink-dim);z-index:1000;line-height:1.9;
+  }
+  .legend-box .sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle;}
+
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12px;}
+  th{
+    text-align:left;font-size:10px;letter-spacing:1px;color:var(--amber);
+    text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--line);
+  }
+  td{padding:7px 10px;border-bottom:1px solid var(--line-dim);color:var(--ink);}
+  tr:hover td{background:rgba(95,212,214,0.04);}
+  .num{color:var(--cyan);}
+  .wpid{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:20px;height:20px;border-radius:50%;border:1px solid var(--cyan);
+    color:var(--cyan);font-size:10px;font-weight:600;
+  }
+
+  .exports{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-top:18px;}
+  @media (max-width:1500px){.exports{grid-template-columns:1fr 1fr;}}
+  @media (max-width:700px){.exports{grid-template-columns:1fr;}}
+  .exp-card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;}
+  .exp-card h3{
+    font-family:'Space Grotesk',sans-serif;font-size:12px;letter-spacing:1px;
+    color:#eef4f8;margin:0 0 10px 0;display:flex;justify-content:space-between;align-items:center;
+  }
+  .exp-card h3 span.badge{
+    font-size:9px;background:var(--cyan-dim);color:var(--cyan);padding:2px 6px;
+    border-radius:3px;letter-spacing:1px;
+  }
+  textarea{
+    width:100%;min-height:96px;background:#081016;border:1px solid var(--line);
+    color:var(--ink);font-family:'IBM Plex Mono',monospace;font-size:11px;
+    padding:8px;border-radius:3px;resize:vertical;line-height:1.5;
+  }
+  .btnrow{display:flex;gap:8px;margin-top:9px;}
+  button{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:0.5px;
+    padding:8px 12px;border-radius:4px;border:1px solid var(--cyan-dim);
+    background:transparent;color:var(--cyan);cursor:pointer;flex:1;
+    text-transform:uppercase;transition:all .12s ease;
+  }
+  button:hover{background:rgba(95,212,214,0.1);border-color:var(--cyan);}
+  button.primary{background:var(--cyan);color:#06171a;font-weight:700;}
+  button.primary:hover{background:#7fe0e2;}
+  button.ghost{border-color:var(--line);color:var(--ink-dim);}
+  button.ghost:hover{color:var(--ink);border-color:var(--ink-dim);}
+  .exp-note{font-size:10px;color:var(--ink-dim);margin-top:8px;line-height:1.5;}
+
+  footer{margin-top:26px;font-size:10px;color:var(--ink-dim);line-height:1.6;
+    border-top:1px solid var(--line);padding-top:14px;}
+  footer b{color:var(--amber);}
+
+  .toast{
+    position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--cyan);color:#06171a;font-family:'IBM Plex Mono',monospace;
+    font-size:12px;font-weight:600;padding:10px 18px;border-radius:5px;
+    opacity:0;pointer-events:none;transition:all .25s ease;z-index:50;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="title-block">
+      <h1>G-IV LAWNMOWER PATTERN PLANNER</h1>
+      <div class="sub">NOAA / AOC &middot; High-Altitude Recon &middot; Dropsonde Survey Grid</div>
+    </div>
+    <div class="tag">
+      LEG GEOMETRY &middot; <b>330 NM</b> E&ndash;W &times; <b>80 NM</b> N&ndash;S<br>
+      3&ndash;4 PASS PATTERN &middot; CENTERED ON STORM FIX
+    </div>
+  </header>
+
+  <div id="alertBanner" style="display:none;"></div>
+
+  <div class="grid">
+
+    <!-- CONTROL PANEL -->
+    <div class="panel">
+      <h2>Mission Setup</h2>
+
+      <div class="field">
+        <label>Mission / Storm ID</label>
+        <input type="text" id="missionId" value="INVEST 94L (AL942025)">
+      </div>
+
+      <div class="row3">
+        <div class="field">
+          <label>Aircraft Tail #</label>
+          <input type="text" id="aircraftTail" value="N49RF">
+        </div>
+        <div class="field">
+          <label>Proposed Takeoff</label>
+          <input type="text" id="takeoffStr" value="25/0530Z" placeholder="DD/HHMMZ">
+        </div>
+      </div>
+
+      <div class="row3">
+        <div class="field">
+          <label>Departure ICAO</label>
+          <input type="text" id="depIcao" list="icaoList" value="KLAL" maxlength="4" style="text-transform:uppercase;">
+          <div class="hint" id="depName">&nbsp;</div>
+        </div>
+        <div class="field">
+          <label>Arrival ICAO</label>
+          <input type="text" id="arrIcao" list="icaoList" value="KLAL" maxlength="4" style="text-transform:uppercase;">
+          <div class="hint" id="arrName">&nbsp;</div>
+        </div>
+      </div>
+      <datalist id="icaoList"></datalist>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <label>Center Fix &mdash; Latitude</label>
+        <div class="row2">
+          <input type="number" id="latVal" value="21.0" step="0.01" min="0" max="90">
+          <select id="latHemi"><option value="N" selected>N</option><option value="S">S</option></select>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Center Fix &mdash; Longitude</label>
+        <div class="row2">
+          <input type="number" id="lonVal" value="69.1" step="0.01" min="0" max="180">
+          <select id="lonHemi"><option value="W" selected>W</option><option value="E">E</option></select>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <label>Number of Passes</label>
+        <select id="legCount">
+          <option value="3">3 passes</option>
+          <option value="4" selected>4 passes</option>
+        </select>
+      </div>
+
+      <div class="row3">
+        <div class="field">
+          <label>Pass Length (NM)</label>
+          <input type="number" id="legLength" value="330" step="5" min="20">
+        </div>
+        <div class="field">
+          <label>Pass Spacing (NM)</label>
+          <input type="number" id="legSpacing" value="80" step="5" min="5">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Orientation</label>
+        <select id="orientation">
+          <option value="EW" selected>E&ndash;W passes / N&ndash;S spacing</option>
+          <option value="NS">N&ndash;S passes / E&ndash;W spacing</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Starting Corner</label>
+        <select id="startCorner">
+          <option value="NW" selected>Northwest</option>
+          <option value="NE">Northeast</option>
+          <option value="SW">Southwest</option>
+          <option value="SE">Southeast</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label>Groundspeed for Time Est. (kt)</label>
+        <input type="number" id="tas" value="420" step="10" min="50">
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="field">
+        <label>Dropsonde Spacing (NM, min 70)</label>
+        <input type="number" id="dropSpacing" value="70" step="5" min="70">
+        <div class="hint">Every waypoint is a drop point. Passes divide evenly (no leftover under 70 NM); turns get endpoints only unless ≥110 NM, then one midpoint.</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <h2>Pattern Summary</h2>
+      <div id="stats"></div>
+    </div>
+
+    <!-- MAIN DISPLAY -->
+    <div>
+      <div class="mapbox" style="position:relative;">
+        <div id="leafletMap"></div>
+        <div class="legend-box">
+          <div><span class="sw" style="background:var(--cyan);"></span>Pattern pass</div>
+          <div><span class="sw" style="background:var(--amber);"></span>Connector / transit</div>
+          <div><span class="sw" style="background:#f2437a;"></span>Dropsonde release</div>
+          <div><span class="sw" style="background:var(--red);"></span>Storm center</div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:18px;">
+        <h2>Waypoint Sequence</h2>
+        <table id="wpTable">
+          <thead>
+            <tr><th>WP</th><th>Latitude</th><th>Longitude</th><th>Decimal</th><th>Course &rarr; next</th><th>Dist &rarr; next</th></tr>
+          </thead>
+          <tbody id="wpBody"></tbody>
+        </table>
+      </div>
+
+      <div class="panel" style="margin-top:18px;">
+        <h2>Dropsonde Release Points</h2>
+        <table id="dropTable">
+          <thead>
+            <tr><th>Sonde</th><th>Latitude</th><th>Longitude</th><th>Decimal</th><th>Dist along track</th><th>Leg</th></tr>
+          </thead>
+          <tbody id="dropBody"></tbody>
+        </table>
+      </div>
+
+      <div class="exports">
+        <div class="exp-card">
+          <h3>SkyVector <span class="badge">DMS ROUTE</span></h3>
+          <textarea id="expSkyvector" readonly></textarea>
+          <div class="btnrow">
+            <button class="primary" onclick="copyField('expSkyvector')">Copy Route</button>
+            <button onclick="openSkyvector()">Open ↗</button>
+          </div>
+          <div class="exp-note">Paste directly into the SkyVector flight plan box, or use Open to launch it centered on the pattern with the route pre-filled.</div>
+        </div>
+
+        <div class="exp-card">
+          <h3>ForeFlight <span class="badge">DMS ROUTE</span></h3>
+          <textarea id="expForeflight" readonly></textarea>
+          <div class="btnrow">
+            <button class="primary" onclick="copyField('expForeflight')">Copy Route</button>
+            <button class="ghost" onclick="void(0)" disabled style="opacity:.35;cursor:default;">No direct link</button>
+          </div>
+          <div class="exp-note">Paste into the ForeFlight Web/Mobile route editor (FPL box) as space-separated waypoints, or enter one at a time via Search.</div>
+        </div>
+
+        <div class="exp-card">
+          <h3>AWC Weather <span class="badge">DECIMAL</span></h3>
+          <textarea id="expDecimal" readonly></textarea>
+          <div class="btnrow">
+            <button class="primary" onclick="copyField('expDecimal')">Copy List</button>
+            <button onclick="openAWC()">Open ↗</button>
+          </div>
+          <div class="exp-note">Open centers the GFA / Flight Path Tool on the storm fix &mdash; use the Route tool there and enter these decimal points manually.</div>
+        </div>
+
+        <div class="exp-card">
+          <h3>Dropsonde List <span class="badge">DECIMAL</span></h3>
+          <textarea id="expDrops" readonly></textarea>
+          <div class="btnrow">
+            <button class="primary" onclick="copyField('expDrops')">Copy List</button>
+          </div>
+          <div class="exp-note">Every pattern waypoint doubles as a release point; excludes transit to/from the departure and arrival airports.</div>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:18px;">
+        <h2>NHC-Style Mission Plan Document</h2>
+        <textarea id="missionPlanPreview" readonly style="min-height:520px;font-size:11.5px;white-space:pre;"></textarea>
+        <div class="btnrow">
+          <button class="primary" onclick="downloadMissionPlan()">Download .txt</button>
+          <button onclick="copyField('missionPlanPreview')">Copy Text</button>
+        </div>
+        <div class="exp-note">Drop times are elapsed mission time from takeoff (transit-out + along-track time at the groundspeed set above).</div>
+      </div>
+
+      <footer>
+        Planning reference only. <b>Verify</b> all coordinates, headings, and distances against current NOAA/AOC mission tasking, NOTAMs, and weather guidance before flight. Distances/courses shown are rhumb-line values for cardinal legs.
+      </footer>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Copied to clipboard</div>
+
+
+<script>
+const US_AIRPORTS = [
+  ["KABE","Lehigh Valley International Airport","Allentown/Bethlehem","PA",40.6518,-75.4428],
+  ["KABI","Abilene Regional Airport","Abilene","TX",32.4113,-99.6819],
+  ["KABQ","Albuquerque International Sunport","Albuquerque","NM",35.04,-106.6089],
+  ["KACK","Nantucket Memorial Airport","Nantucket","MA",41.2531,-70.0602],
+  ["KACT","Waco Regional Airport","Waco","TX",31.6113,-97.2305],
+  ["KACV","California Redwood Coast-Humboldt County Airport","Arcata/Eureka","CA",40.9781,-124.109],
+  ["KACY","Atlantic City International Airport","Atlantic City","NJ",39.4562,-74.5775],
+  ["KAEX","Alexandria International Airport","Alexandria","LA",31.3258,-92.5467],
+  ["KAFW","Perot Field/Fort Worth Alliance Airport","Fort Worth","TX",32.9904,-97.3195],
+  ["KAGS","Augusta Regional At Bush Field","Augusta","GA",33.3699,-81.9645],
+  ["KAHN","Athens Ben Epps Airport","Athens","GA",33.9488,-83.3256],
+  ["KALB","Albany International Airport","Albany","NY",42.7483,-73.8017],
+  ["KAMA","Rick Husband Amarillo International Airport","Amarillo","TX",35.2179,-101.7064],
+  ["KATL","Hartsfield Jackson Atlanta International Airport","Atlanta","GA",33.6367,-84.4281],
+  ["KAUS","Austin Bergstrom International Airport","Austin","TX",30.1975,-97.662],
+  ["KAVL","Asheville Regional Airport","Asheville","NC",35.4355,-82.5419],
+  ["KAVP","Wilkes-Barre/Scranton International Airport","Wilkes-Barre/Scranton","PA",41.3371,-75.7242],
+  ["KAZO","Kalamazoo/Battle Creek International Airport","Kalamazoo","MI",42.2321,-85.5496],
+  ["KBAF","Westfield-Barnes Regional Airport","Westfield","MA",42.1578,-72.7156],
+  ["KBDL","Bradley International Airport","Hartford","CT",41.9386,-72.688],
+  ["KBDR","Igor I Sikorsky Memorial Airport","Bridgeport","CT",41.1635,-73.1262],
+  ["KBED","Laurence G Hanscom Field","Bedford","MA",42.47,-71.289],
+  ["KBFI","King County International Airport - Boeing Field","Seattle","WA",47.527,-122.2999],
+  ["KBFL","Meadows Field","Bakersfield","CA",35.4336,-119.057],
+  ["KBGM","Greater Binghamton/Edwin A Link field","Binghamton","NY",42.2087,-75.9798],
+  ["KBGR","Bangor International Airport","Bangor","ME",44.8064,-68.8267],
+  ["KBHB","Hancock County-Bar Harbor Airport","Bar Harbor","ME",44.45,-68.3615],
+  ["KBHM","Birmingham-Shuttlesworth International Airport","Birmingham","AL",33.5629,-86.7507],
+  ["KBIL","Billings Logan International Airport","Billings","MT",45.8089,-108.5412],
+  ["KBIS","Bismarck Municipal Airport","Bismarck","ND",46.7727,-100.7469],
+  ["KBJC","Rocky Mountain Metropolitan Airport","Denver","CO",39.9088,-105.117],
+  ["KBKL","Burke Lakefront Airport","Cleveland","OH",41.5175,-81.6833],
+  ["KBLI","Bellingham International Airport","Bellingham","WA",48.7928,-122.538],
+  ["KBMI","Central Illinois Regional Airport at Bloomington-Normal","Bloomington/Normal","IL",40.4771,-88.9159],
+  ["KBNA","Nashville International Airport","Nashville","TN",36.1245,-86.6782],
+  ["KBOI","Boise Air Terminal/Gowen Field","Boise","ID",43.5644,-116.223],
+  ["KBOS","Boston Logan International Airport","Boston","MA",42.362,-71.0079],
+  ["KBRO","Brownsville South Padre Island International Airport","Brownsville","TX",25.9072,-97.4252],
+  ["KBTR","Baton Rouge Metropolitan Airport","Baton Rouge","LA",30.5332,-91.1496],
+  ["KBTV","Patrick Leahy Burlington International Airport","Burlington","VT",44.4719,-73.1533],
+  ["KBUF","Buffalo Niagara International Airport","Buffalo","NY",42.9405,-78.7322],
+  ["KBUR","Hollywood Burbank/Bob Hope Airport","Burbank","CA",34.2028,-118.3581],
+  ["KBWG","Bowling Green Warren County Regional Airport","Bowling Green","KY",36.9645,-86.4197],
+  ["KBWI","Baltimore/Washington International Thurgood Marshall Airport","Baltimore","MD",39.1754,-76.6683],
+  ["KBZN","Bozeman Yellowstone International Airport","Bozeman","MT",45.7789,-111.1537],
+  ["KCAE","Columbia Metropolitan Airport","Columbia","SC",33.9382,-81.123],
+  ["KCAK","Akron Canton Regional Airport","Akron","OH",40.9161,-81.4422],
+  ["KCDC","Cedar City Regional Airport","Cedar City","UT",37.701,-113.099],
+  ["KCHA","Chattanooga Metropolitan Airport (Lovell Field)","Chattanooga","TN",35.0353,-85.2038],
+  ["KCHS","Charleston International Airport","Charleston","SC",32.8962,-80.0382],
+  ["KCID","The Eastern Iowa Airport","Cedar Rapids","IA",41.8847,-91.7108],
+  ["KCLE","Cleveland Hopkins International Airport","Cleveland","OH",41.4117,-81.8498],
+  ["KCLL","Easterwood Field","College Station","TX",30.5886,-96.3638],
+  ["KCLT","Charlotte Douglas International Airport","Charlotte","NC",35.214,-80.9431],
+  ["KCMH","John Glenn Columbus International Airport","Columbus","OH",39.998,-82.8919],
+  ["KCMI","University of Illinois Willard Airport","Savoy","IL",40.0398,-88.2762],
+  ["KCNY","Canyonlands Regional Airport","Moab","UT",38.755,-109.755],
+  ["KCOS","City of Colorado Springs Municipal Airport","Colorado Springs","CO",38.8058,-104.701],
+  ["KCOU","Columbia Regional Airport","Columbia","MO",38.8181,-92.2196],
+  ["KCPR","Casper-Natrona County International Airport","Casper","WY",42.9074,-106.4616],
+  ["KCRP","Corpus Christi International Airport","Corpus Christi","TX",27.7704,-97.5012],
+  ["KCRW","Yeager Airport","Charleston","WV",38.3731,-81.5932],
+  ["KCSG","Columbus Airport","Columbus","GA",32.5164,-84.9396],
+  ["KCVG","Cincinnati Northern Kentucky International Airport","Cincinnati / Covington","KY",39.0488,-84.6678],
+  ["KCYS","Cheyenne Regional Jerry Olson Field","Cheyenne","WY",41.1557,-104.812],
+  ["KDAB","Daytona Beach International Airport","Daytona Beach","FL",29.1825,-81.0595],
+  ["KDAL","Dallas Love Field","Dallas","TX",32.8448,-96.8477],
+  ["KDAY","James M. Cox Dayton International Airport","Dayton","OH",39.9024,-84.2194],
+  ["KDBQ","Dubuque Regional Airport","Dubuque","IA",42.402,-90.7095],
+  ["KDCA","Ronald Reagan Washington National Airport","Washington","DC",38.8521,-77.0377],
+  ["KDEN","Denver International Airport","Denver","CO",39.86,-104.6738],
+  ["KDET","Coleman A. Young Municipal Airport","Detroit","MI",42.4092,-83.0099],
+  ["KDFW","Dallas Fort Worth International Airport","Dallas-Fort Worth","TX",32.8968,-97.038],
+  ["KDLH","Duluth International Airport","Duluth","MN",46.8419,-92.1987],
+  ["KDRO","Durango La Plata County Airport","Durango","CO",37.1515,-107.754],
+  ["KDSM","Des Moines International Airport","Des Moines","IA",41.534,-93.6567],
+  ["KDTW","Detroit Metropolitan Wayne County Airport","Detroit","MI",42.2138,-83.3538],
+  ["KEAU","Chippewa Valley Regional Airport","Eau Claire","WI",44.8658,-91.4843],
+  ["KECP","Northwest Florida Beaches International Airport","Panama City Beach","FL",30.3571,-85.7954],
+  ["KEEN","Dillant Hopkins Airport","Keene","NH",42.8984,-72.2708],
+  ["KEGE","Eagle County Regional Airport","Eagle","CO",39.6426,-106.918],
+  ["KEKO","Elko Regional Airport","Elko","NV",40.8249,-115.792],
+  ["KELM","Elmira Corning Regional Airport","Elmira/Corning","NY",42.1599,-76.8916],
+  ["KELP","El Paso International Airport","El Paso","TX",31.8099,-106.3756],
+  ["KERI","Erie International Tom Ridge Field","Erie","PA",42.0831,-80.1739],
+  ["KEUG","Eugene Airport","Eugene","OR",44.1246,-123.212],
+  ["KEVV","Evansville Regional Airport","Evansville","IN",38.037,-87.5324],
+  ["KEWR","Newark Liberty International Airport","Newark","NJ",40.6894,-74.1705],
+  ["KEYW","Key West International Airport","Key West","FL",24.5561,-81.7596],
+  ["KFAR","Hector International Airport","Fargo","ND",46.9207,-96.8158],
+  ["KFAT","Fresno Yosemite International Airport","Fresno","CA",36.7758,-119.718],
+  ["KFAY","Fayetteville Regional Airport - Grannis Field","Fayetteville","NC",34.9912,-78.8803],
+  ["KFLG","Flagstaff Pulliam Airport","Flagstaff","AZ",35.1398,-111.6698],
+  ["KFLL","Fort Lauderdale Hollywood International Airport","Fort Lauderdale","FL",26.0726,-80.1527],
+  ["KFNL","Northern Colorado Regional Airport","Loveland","CO",40.4497,-105.0113],
+  ["KFNT","Bishop International Airport","Flint","MI",42.9693,-83.7434],
+  ["KFRG","Republic Airport","East Farmingdale","NY",40.7286,-73.4143],
+  ["KFSD","Sioux Falls Regional Airport","Sioux Falls","SD",43.5855,-96.7412],
+  ["KFSM","Fort Smith Regional Airport","Fort Smith","AR",35.3366,-94.3674],
+  ["KFTW","Fort Worth Meacham International Airport","Fort Worth","TX",32.8199,-97.3608],
+  ["KFTY","Fulton County Airport Brown Field","Atlanta","GA",33.7791,-84.5214],
+  ["KFWA","Fort Wayne International Airport","Fort Wayne","IN",40.9789,-85.1945],
+  ["KGCK","Garden City Regional Airport","Garden City","KS",37.9275,-100.724],
+  ["KGCN","Grand Canyon National Park Airport","Grand Canyon - Tusayan","AZ",35.9524,-112.147],
+  ["KGEG","Spokane International Airport","Spokane","WA",47.6199,-117.534],
+  ["KGFK","Grand Forks International Airport","Grand Forks","ND",47.9493,-97.1761],
+  ["KGGG","East Texas Regional Airport","Longview","TX",32.384,-94.7115],
+  ["KGJT","Grand Junction Regional Airport","Grand Junction","CO",39.1267,-108.5294],
+  ["KGLS","Scholes International At Galveston Airport","Galveston","TX",29.2653,-94.8604],
+  ["KGPI","Glacier Park International Airport","Kalispell","MT",48.3105,-114.256],
+  ["KGPT","Gulfport Biloxi International Airport","Gulfport","MS",30.4056,-89.0698],
+  ["KGRB","Austin Straubel International Airport","Green Bay","WI",44.4835,-88.1308],
+  ["KGRR","Gerald R. Ford International Airport","Grand Rapids","MI",42.8808,-85.5228],
+  ["KGSO","Piedmont Triad International Airport","Greensboro","NC",36.0994,-79.9373],
+  ["KGSP","Greenville-Spartanburg International Airport","Greenville/Greer/Spartanburg","SC",34.8957,-82.2189],
+  ["KGTF","Great Falls International Airport","Great Falls","MT",47.482,-111.371],
+  ["KHFD","Hartford Brainard Airport","Hartford","CT",41.7367,-72.6494],
+  ["KHLN","Helena Regional Airport","Helena","MT",46.6068,-111.983],
+  ["KHOT","Memorial Field Airport","Hot Springs","AR",34.4788,-93.0963],
+  ["KHOU","William P. Hobby Airport","Houston","TX",29.6453,-95.2768],
+  ["KHPN","Westchester County Airport","White Plains","NY",41.067,-73.7076],
+  ["KHRL","Valley International Airport","Harlingen","TX",26.2285,-97.6544],
+  ["KHSV","Huntsville International Airport","Huntsville","AL",34.6362,-86.7744],
+  ["KHVN","Tweed New Haven Airport","New Haven","CT",41.2629,-72.8877],
+  ["KHYA","Cape Cod Gateway Airport","Hyannis","MA",41.6693,-70.2804],
+  ["KIAD","Washington Dulles International Airport","Dulles","VA",38.9445,-77.4558],
+  ["KIAG","Niagara Falls International Airport","Niagara Falls","NY",43.1073,-78.9462],
+  ["KIAH","George Bush Intercontinental Airport","Houston","TX",29.9844,-95.3414],
+  ["KICT","Wichita Dwight D. Eisenhower National Airport","Wichita","KS",37.6503,-97.4286],
+  ["KIDA","Idaho Falls Regional Airport","Idaho Falls","ID",43.5146,-112.071],
+  ["KILG","Wilmington Airport","Wilmington","DE",39.6787,-75.6065],
+  ["KILM","Wilmington International Airport","Wilmington","NC",34.2723,-77.9051],
+  ["KIND","Indianapolis International Airport","Indianapolis","IN",39.7173,-86.2944],
+  ["KIPT","Williamsport Regional Airport","Williamsport","PA",41.2421,-76.9224],
+  ["KISP","Long Island MacArthur Airport","Islip","NY",40.7963,-73.1017],
+  ["KIWA","Mesa Gateway Airport","Mesa","AZ",33.3078,-111.655],
+  ["KJAC","Jackson Hole Airport","Jackson","WY",43.6073,-110.738],
+  ["KJAN","Jackson-Medgar Wiley Evers International Airport","Jackson","MS",32.3112,-90.0759],
+  ["KJAX","Jacksonville International Airport","Jacksonville","FL",30.4925,-81.6878],
+  ["KJFK","John F. Kennedy International Airport","New York","NY",40.6394,-73.7793],
+  ["KJQF","Concord-Padgett Regional Airport","Concord","NC",35.3878,-80.7091],
+  ["KLAL","Lakeland Linder International Airport","Lakeland","FL",27.9893,-82.0207],
+  ["KLAN","Capital Region International Airport","Lansing","MI",42.7776,-84.5857],
+  ["KLAS","Harry Reid International Airport","Las Vegas","NV",36.0834,-115.1518],
+  ["KLAX","Los Angeles International Airport","Los Angeles","CA",33.9425,-118.408],
+  ["KLBB","Lubbock Preston Smith International Airport","Lubbock","TX",33.6636,-101.823],
+  ["KLBE","Arnold Palmer Regional Airport","Latrobe","PA",40.2759,-79.4048],
+  ["KLBF","North Platte Regional Airport Lee Bird Field","North Platte","NE",41.1262,-100.684],
+  ["KLCK","Rickenbacker International Airport","Columbus","OH",39.8138,-82.9278],
+  ["KLEB","Lebanon Municipal Airport","Lebanon","NH",43.6261,-72.3042],
+  ["KLEX","Blue Grass Airport","Lexington","KY",38.0351,-84.6067],
+  ["KLFT","Lafayette Regional Airport","Lafayette","LA",30.2053,-91.9876],
+  ["KLGA","LaGuardia Airport","New York","NY",40.7772,-73.8726],
+  ["KLGB","Long Beach International Airport","Long Beach","CA",33.8165,-118.1499],
+  ["KLIT","Bill & Hillary Clinton National Airport/Adams Field","Little Rock","AR",34.7292,-92.2236],
+  ["KLNK","Lincoln Airport","Lincoln","NE",40.8449,-96.7618],
+  ["KLNS","Lancaster Airport","Lancaster","PA",40.1217,-76.2961],
+  ["KLOU","Bowman Field","Louisville","KY",38.228,-85.6637],
+  ["KLRD","Laredo International Airport","Laredo","TX",27.5438,-99.4616],
+  ["KLSE","La Crosse Regional Airport","La Crosse","WI",43.879,-91.2567],
+  ["KLUK","Cincinnati Municipal Airport Lunken Field","Cincinnati","OH",39.1024,-84.4189],
+  ["KLYH","Lynchburg Regional Airport - Preston Glenn Field","Lynchburg","VA",37.3267,-79.2004],
+  ["KMAF","Midland International Air and Space Port","Midland","TX",31.9425,-102.202],
+  ["KMBS","MBS International Airport","Freeland","MI",43.5332,-84.0831],
+  ["KMCI","Kansas City International Airport","Kansas City","MO",39.3017,-94.7139],
+  ["KMCO","Orlando International Airport","Orlando","FL",28.4294,-81.309],
+  ["KMDT","Harrisburg International Airport","Harrisburg","PA",40.1928,-76.7623],
+  ["KMDW","Chicago Midway International Airport","Chicago","IL",41.786,-87.7524],
+  ["KMEM","Memphis International Airport","Memphis","TN",35.0438,-89.9763],
+  ["KMFE","McAllen Miller International Airport","McAllen","TX",26.1761,-98.238],
+  ["KMFR","Rogue Valley International-Medford Airport","Medford","OR",42.3742,-122.873],
+  ["KMGM","Montgomery Regional (Dannelly Field) Airport","Montgomery","AL",32.3006,-86.394],
+  ["KMHK","Manhattan Regional Airport","Manhattan","KS",39.141,-96.6708],
+  ["KMHT","Manchester-Boston Regional Airport","Manchester","NH",42.9326,-71.4357],
+  ["KMIA","Miami International Airport","Miami","FL",25.796,-80.2898],
+  ["KMKE","General Mitchell International Airport","Milwaukee","WI",42.9472,-87.8966],
+  ["KMLB","Melbourne Orlando International Airport","Melbourne","FL",28.102,-80.6411],
+  ["KMLI","Quad City International Airport","Moline","IL",41.4485,-90.5075],
+  ["KMLU","Monroe Regional Airport","Monroe","LA",32.5109,-92.0377],
+  ["KMMU","Morristown Municipal Airport","Morristown","NJ",40.7991,-74.4149],
+  ["KMMV","McMinnville Municipal Airport","McMinnville","OR",45.1944,-123.136],
+  ["KMOB","Mobile Regional Airport","Mobile","AL",30.6912,-88.2428],
+  ["KMOD","Modesto City Co-Harry Sham Field","Modesto","CA",37.6258,-120.954],
+  ["KMOT","Minot International Airport","Minot","ND",48.258,-101.2791],
+  ["KMRY","Monterey Regional Airport","Monterey","CA",36.5868,-121.8442],
+  ["KMSN","Dane County Regional Truax Field","Madison","WI",43.1399,-89.3375],
+  ["KMSO","Missoula Montana Airport","Missoula","MT",46.9158,-114.0911],
+  ["KMSP","Minneapolis–Saint Paul International Airport / Wold–Chamberlain Field","Minneapolis","MN",44.8801,-93.2217],
+  ["KMSY","Louis Armstrong New Orleans International Airport","New Orleans","LA",29.9934,-90.2647],
+  ["KMTJ","Montrose Regional Airport","Montrose","CO",38.5098,-107.894],
+  ["KMYR","Myrtle Beach International Airport","Myrtle Beach","SC",33.6797,-78.9283],
+  ["KNYL","Yuma International Airport / Marine Corps Air Station Yuma","Yuma","AZ",32.6509,-114.6094],
+  ["KOAK","Oakland San Francisco Bay Airport","Oakland","CA",37.7201,-122.2212],
+  ["KOGD","Ogden Hinckley Airport","Ogden","UT",41.1959,-112.012],
+  ["KOKC","OKC Will Rogers World Airport","Oklahoma City","OK",35.3934,-97.5982],
+  ["KOMA","Eppley Airfield","Omaha","NE",41.3032,-95.8941],
+  ["KONT","Ontario International Airport","Ontario","CA",34.056,-117.601],
+  ["KORD","Chicago O'Hare International Airport","Chicago","IL",41.9786,-87.9048],
+  ["KORF","Norfolk International Airport","Norfolk","VA",36.8953,-76.201],
+  ["KORH","Worcester Regional Airport","Worcester","MA",42.2673,-71.8757],
+  ["KOSH","Wittman Regional Airport","Oshkosh","WI",43.9844,-88.557],
+  ["KPAE","Seattle Paine Field International Airport","Everett","WA",47.9063,-122.282],
+  ["KPAH","Barkley Regional Airport","Paducah","KY",37.0608,-88.7738],
+  ["KPBI","President Donald J. Trump International Airport","West Palm Beach","FL",26.6832,-80.0956],
+  ["KPDX","Portland International Airport","Portland","OR",45.5887,-122.598],
+  ["KPHF","Newport News Williamsburg International Airport","Newport News","VA",37.1319,-76.493],
+  ["KPHL","Philadelphia International Airport","Philadelphia","PA",39.8719,-75.2411],
+  ["KPHX","Phoenix Sky Harbor International Airport","Phoenix","AZ",33.4353,-112.0059],
+  ["KPIA","General Wayne A. Downing Peoria International Airport","Peoria","IL",40.6638,-89.6926],
+  ["KPIE","St. Petersburg Clearwater International Airport","Pinellas Park","FL",27.9102,-82.6874],
+  ["KPIT","Pittsburgh International Airport","Pittsburgh","PA",40.4915,-80.2329],
+  ["KPNS","Pensacola International Airport","Pensacola","FL",30.4727,-87.1866],
+  ["KPRC","Prescott Regional Airport - Ernest A. Love Field","Prescott","AZ",34.6535,-112.4199],
+  ["KPSC","Tri Cities Airport","Pasco","WA",46.2647,-119.119],
+  ["KPSM","Portsmouth International Airport at Pease","Portsmouth","NH",43.0779,-70.8233],
+  ["KPSP","Palm Springs International Airport","Palm Springs","CA",33.8297,-116.507],
+  ["KPTK","Oakland County International Airport","Pontiac","MI",42.6655,-83.4201],
+  ["KPUB","Pueblo Memorial Airport","Pueblo","CO",38.2891,-104.497],
+  ["KPVD","Rhode Island T. F. Green International Airport","Providence/Warwick","RI",41.725,-71.4257],
+  ["KPVU","Provo Municipal Airport","Provo","UT",40.2189,-111.7224],
+  ["KPWM","Portland International Jetport","Portland","ME",43.6462,-70.3093],
+  ["KRAP","Rapid City Regional Airport","Rapid City","SD",44.0453,-103.057],
+  ["KRDD","Redding Municipal Airport","Redding","CA",40.509,-122.293],
+  ["KRDM","Roberts Field","Redmond","OR",44.2541,-121.15],
+  ["KRDU","Raleigh-Durham International Airport","Raleigh/Durham","NC",35.8787,-78.7873],
+  ["KRFD","Chicago Rockford International Airport","Chicago/Rockford","IL",42.1954,-89.0972],
+  ["KRIC","Richmond International Airport","Richmond","VA",37.5052,-77.3197],
+  ["KRNO","Reno Tahoe International Airport","Reno","NV",39.4991,-119.768],
+  ["KROA","Roanoke–Blacksburg Regional Airport","Roanoke","VA",37.3255,-79.9754],
+  ["KROC","Frederick Douglass Greater Rochester International Airport","Rochester","NY",43.1189,-77.6724],
+  ["KROW","Roswell Air Center Airport","Roswell","NM",33.3016,-104.531],
+  ["KRST","Rochester International Airport","Rochester","MN",43.9083,-92.5],
+  ["KRSW","Southwest Florida International Airport","Fort Myers","FL",26.5347,-81.7528],
+  ["KSAN","San Diego International Airport","San Diego","CA",32.7336,-117.19],
+  ["KSAT","San Antonio International Airport","San Antonio","TX",29.5337,-98.4698],
+  ["KSAV","Savannah Hilton Head International Airport","Savannah","GA",32.1266,-81.2],
+  ["KSBA","Santa Barbara Municipal Airport","Santa Barbara","CA",34.4262,-119.84],
+  ["KSBD","San Bernardino International Airport","San Bernardino","CA",34.0967,-117.2366],
+  ["KSBN","South Bend International Airport","South Bend","IN",41.7083,-86.3169],
+  ["KSBY","Salisbury Ocean City Wicomico Regional Airport","Salisbury","MD",38.3405,-75.5103],
+  ["KSCK","Stockton Metropolitan Airport","Stockton","CA",37.8933,-121.2381],
+  ["KSDF","Louisville Muhammad Ali International Airport","Louisville","KY",38.1706,-85.7351],
+  ["KSDM","Brown Field Municipal Airport","San Diego","CA",32.5726,-116.98],
+  ["KSEA","Seattle–Tacoma International Airport","Seattle","WA",47.4479,-122.3103],
+  ["KSFB","Orlando Sanford International Airport","Orlando","FL",28.7743,-81.2346],
+  ["KSFO","San Francisco International Airport","San Francisco","CA",37.6198,-122.3748],
+  ["KSGF","Springfield Branson National Airport","Springfield","MO",37.245,-93.3886],
+  ["KSHV","Shreveport Regional Airport","Shreveport","LA",32.4447,-93.8267],
+  ["KSJC","Norman Y. Mineta San Jose International Airport","San Jose","CA",37.3625,-121.9292],
+  ["KSJT","San Angelo Regional Mathis Field","San Angelo","TX",31.3577,-100.496],
+  ["KSLC","Salt Lake City International Airport","Salt Lake City","UT",40.7889,-111.9799],
+  ["KSLN","Salina Municipal Airport","Salina","KS",38.791,-97.6522],
+  ["KSMF","Sacramento International Airport","Sacramento","CA",38.6954,-121.591],
+  ["KSMX","Santa Maria Public Airport Captain G Allan Hancock Field","Santa Maria","CA",34.8989,-120.457],
+  ["KSNA","John Wayne Orange County International Airport","Santa Ana","CA",33.6751,-117.8693],
+  ["KSNS","Salinas Municipal Airport","Salinas","CA",36.6628,-121.606],
+  ["KSPI","Abraham Lincoln Capital Airport","Springfield","IL",39.8441,-89.6779],
+  ["KSRQ","Sarasota Bradenton International Airport","Sarasota/Bradenton","FL",27.3946,-82.5544],
+  ["KSSI","St Simons Island Airport","St Simons Island","GA",31.1518,-81.3913],
+  ["KSTL","St. Louis Lambert International Airport","St Louis","MO",38.7487,-90.37],
+  ["KSTP","Saint Paul Downtown Holman Field","Saint Paul","MN",44.9348,-93.06],
+  ["KSTS","Charles M. Schulz Sonoma County Airport","Santa Rosa","CA",38.509,-122.813],
+  ["KSUS","Spirit of St Louis Airport","St Louis","MO",38.6621,-90.652],
+  ["KSUX","Sioux Gateway Airport / Brigadier General Bud Day Field","Sioux City","IA",42.3976,-96.3822],
+  ["KSWF","New York Stewart International Airport","Newburgh","NY",41.5042,-74.1089],
+  ["KSYR","Syracuse Hancock International Airport","Syracuse","NY",43.1112,-76.1063],
+  ["KTEB","Teterboro Airport","Teterboro","NJ",40.8501,-74.0608],
+  ["KTIX","Space Coast Regional Airport","Titusville","FL",28.5148,-80.7992],
+  ["KTLH","Tallahassee International Airport","Tallahassee","FL",30.4012,-84.3543],
+  ["KTOL","Eugene F. Kranz Toledo Express Airport","Toledo","OH",41.5868,-83.8078],
+  ["KTPA","Tampa International Airport","Tampa","FL",27.9755,-82.5332],
+  ["KTRI","Tri-Cities Regional TN/VA Airport","Blountville","TN",36.4752,-82.4074],
+  ["KTRK","Truckee Tahoe Airport","Truckee","CA",39.3186,-120.1406],
+  ["KTTN","Trenton Mercer Airport","Ewing Township","NJ",40.2767,-74.8135],
+  ["KTUL","Tulsa International Airport","Tulsa","OK",36.1971,-95.8862],
+  ["KTUS","Tucson International Airport","Tucson","AZ",32.115,-110.9381],
+  ["KTVC","Cherry Capital Airport","Traverse City","MI",44.7414,-85.5822],
+  ["KTVL","Lake Tahoe Airport","South Lake Tahoe","CA",38.8939,-119.995],
+  ["KTYR","Tyler Pounds Regional Airport","Tyler","TX",32.3541,-95.4024],
+  ["KTYS","McGhee Tyson Airport","Knoxville/Maryville","TN",35.811,-83.994],
+  ["KUNV","State College Regional Airport","State College","PA",40.8494,-77.8485],
+  ["KVPS","Destin-Fort Walton Beach Airport","Valparaiso","FL",30.4813,-86.5158],
+  ["KVRB","Vero Beach Regional Airport","Vero Beach","FL",27.6556,-80.4179],
+  ["KXNA","Northwest Arkansas National Airport","Fayetteville/Springdale/Rogers","AR",36.2819,-94.3068],
+  ["KYIP","Willow Run Airport","Detroit","MI",42.2379,-83.5304],
+  ["PAFA","Fairbanks International Airport","Fairbanks","AK",64.8151,-147.856],
+  ["PAJN","Juneau International Airport","Juneau","AK",58.3549,-134.5744],
+  ["PANC","Ted Stevens Anchorage International Airport","Anchorage","AK",61.179,-149.9926],
+  ["PHKO","Ellison Onizuka Kona International Airport at Keāhole","Kailua-Kona","HI",19.7388,-156.0456],
+  ["PHLI","Lihue Airport","Lihue, Kauai","HI",21.9744,-159.3371],
+  ["PHNL","Daniel K. Inouye International Airport","Honolulu, Oahu","HI",21.3184,-157.9257],
+  ["PHOG","Kahului International Airport","Kahului","HI",20.8963,-156.4318],
+  ["PHTO","Hilo International Airport","Hilo","HI",19.7214,-155.0454],
+];
+
+const RAD = Math.PI/180;
+
+function pad(n, len){ return String(n).padStart(len,'0'); }
+
+function nmToDegLat(nm){ return nm/60; }
+function nmToDegLon(nm, latDeg){ return nm/(60*Math.cos(latDeg*RAD)); }
+
+function toDMS(deg, isLat){
+  const hemi = isLat ? (deg>=0?'N':'S') : (deg>=0?'E':'W');
+  let abs = Math.abs(deg);
+  let D = Math.floor(abs);
+  let mFull = (abs-D)*60;
+  let M = Math.floor(mFull);
+  let S = Math.round((mFull-M)*60);
+  if(S===60){S=0;M++;}
+  if(M===60){M=0;D++;}
+  return {D, M, S, hemi, Dstr: pad(D, isLat?2:3), Mstr: pad(M,2), Sstr: pad(S,2)};
+}
+
+function dmsDisplay(deg,isLat){
+  const d = toDMS(deg,isLat);
+  return `${d.D}°${d.Mstr}'${d.Sstr}"${d.hemi}`;
+}
+
+function skyvectorToken(lat,lon){
+  const la = toDMS(lat,true), lo = toDMS(lon,false);
+  return `${la.Dstr}${la.Mstr}${la.Sstr}${la.hemi}${lo.Dstr}${lo.Mstr}${lo.Sstr}${lo.hemi}`;
+}
+function foreflightToken(lat,lon){
+  const la = toDMS(lat,true), lo = toDMS(lon,false);
+  return `${la.hemi}${la.Dstr}${la.Mstr}${la.Sstr}/${lo.hemi}${lo.Dstr}${lo.Mstr}${lo.Sstr}`;
+}
+function decimalToken(lat,lon){
+  return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+}
+
+const MAX_MISSION_NM = 3200;
+const airportIndex = {};
+US_AIRPORTS.forEach(a=>{ airportIndex[a[0]] = a; });
+
+function initAirportList(){
+  const dl = document.getElementById('icaoList');
+  dl.innerHTML = US_AIRPORTS.map(a=>`<option value="${a[0]}">${a[1]} — ${a[2]}, ${a[3]}</option>`).join('');
+}
+
+function lookupAirport(icao){
+  return airportIndex[(icao||'').trim().toUpperCase()] || null;
+}
+
+function haversineNM(lat1,lon1,lat2,lon2){
+  const R = 3440.065;
+  const dLat = (lat2-lat1)*RAD, dLon=(lon2-lon1)*RAD;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*RAD)*Math.cos(lat2*RAD)*Math.sin(dLon/2)**2;
+  return R * 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+function bearingDeg(lat1,lon1,lat2,lon2){
+  const y = Math.sin((lon2-lon1)*RAD)*Math.cos(lat2*RAD);
+  const x = Math.cos(lat1*RAD)*Math.sin(lat2*RAD) - Math.sin(lat1*RAD)*Math.cos(lat2*RAD)*Math.cos((lon2-lon1)*RAD);
+  let b = Math.atan2(y,x)/RAD;
+  return (b+360)%360;
+}
+
+function nearestAirports(lat, lon, n){
+  return US_AIRPORTS.map(a=>({icao:a[0], name:a[1], city:a[2], state:a[3], lat:a[4], lon:a[5],
+      dist: haversineNM(lat,lon,a[4],a[5])}))
+    .sort((a,b)=>a.dist-b.dist)
+    .slice(0,n);
+}
+
+function niceStep(range){
+  const steps=[0.1,0.2,0.25,0.5,1,2,5,10];
+  for(const s of steps){ if(range/s<=7) return s; }
+  return 10;
+}
+
+function generatePattern(p){
+  const N = p.legCount;
+  let offsets = [];
+  for(let i=0;i<N;i++){ offsets.push((i-(N-1)/2)*p.legSpacing); }
+  offsets.sort((a,b)=>b-a); // descending: most-positive first
+
+  const startsNorth = p.startCorner.startsWith('N');
+  const startsWest = p.startCorner.endsWith('W');
+
+  let rowOffsets, dirForward;
+  if(p.orientation==='EW'){
+    // rows ordered by latitude (N/S half of corner); direction within each row set by W/E half
+    rowOffsets = startsNorth ? offsets : offsets.slice().reverse();
+    dirForward = startsWest; // true => row starts west, ends east
+  } else {
+    // NS: "rows" are columns ordered by longitude (W/E half); direction within each column set by N/S half
+    rowOffsets = startsWest ? offsets.slice().reverse() : offsets; // reversed(ascending) = west(most negative) first
+    dirForward = !startsNorth; // p1/p2 below: dirForward=true starts south, so invert for "starts north"
+  }
+
+  const waypoints = [];
+  const half = p.legLength/2;
+
+  for(let i=0;i<N;i++){
+    const off = rowOffsets[i];
+    if(p.orientation==='EW'){
+      const rowLat = p.centerLat + nmToDegLat(off);
+      const dLon = nmToDegLon(half, rowLat);
+      const westLon = p.centerLon - dLon, eastLon = p.centerLon + dLon;
+      const p1 = dirForward ? {lat:rowLat, lon:westLon} : {lat:rowLat, lon:eastLon};
+      const p2 = dirForward ? {lat:rowLat, lon:eastLon} : {lat:rowLat, lon:westLon};
+      waypoints.push(p1,p2);
+    } else {
+      const colLon = p.centerLon + nmToDegLon(off, p.centerLat);
+      const dLat = nmToDegLat(half);
+      const southLat = p.centerLat - dLat, northLat = p.centerLat + dLat;
+      const p1 = dirForward ? {lat:southLat, lon:colLon} : {lat:northLat, lon:colLon};
+      const p2 = dirForward ? {lat:northLat, lon:colLon} : {lat:southLat, lon:colLon};
+      waypoints.push(p1,p2);
+    }
+    dirForward = !dirForward;
+  }
+  return waypoints;
+}
+
+function legInfo(a,b){
+  // all legs are cardinal by construction
+  if(Math.abs(a.lat-b.lat) < 1e-9){
+    const dist = Math.abs(b.lon-a.lon) * Math.cos(a.lat*RAD) * 60;
+    const course = b.lon>a.lon ? 90 : 270;
+    return {dist, course};
+  } else {
+    const dist = Math.abs(b.lat-a.lat) * 60;
+    const course = b.lat>a.lat ? 0 : 180;
+    return {dist, course};
+  }
+}
+
+const CONNECTOR_MIDPOINT_MIN_NM = 110;
+
+function computeDropPoints(wps, spacingNM){
+  const drops = [];
+  drops.push({ lat: wps[0].lat, lon: wps[0].lon, distAlong: 0, leg: 'WP1', atWaypoint: 1 });
+
+  let globalCum = 0;
+  for(let i=0;i<wps.length-1;i++){
+    const a = wps[i], b = wps[i+1];
+    const info = legInfo(a,b);
+    const L = info.dist;
+    const legLabel = `WP${i+1}→WP${i+2}`;
+    // the lawnmower pattern always alternates pass, connector, pass, connector...
+    // starting with a pass leg, so even leg index = pass (long), odd = connector (short/turn)
+    const isPassLeg = (i % 2 === 0);
+
+    if(isPassLeg){
+      // long pass leg: divide evenly into the most segments possible while
+      // keeping every segment >= spacingNM - never a short leftover at the end
+      const segments = Math.max(1, Math.floor(L / spacingNM));
+      if(segments > 1){
+        const evenSpacing = L / segments;
+        for(let j=1;j<segments;j++){
+          const f = (evenSpacing * j) / L;
+          const lat = a.lat + (b.lat - a.lat) * f;
+          const lon = a.lon + (b.lon - a.lon) * f;
+          drops.push({ lat, lon, distAlong: globalCum + evenSpacing * j, leg: legLabel, atWaypoint: null });
+        }
+      }
+    } else {
+      // short connector/turn leg: endpoints already satisfy >=70nm spacing on their own
+      // once the leg is long enough; only add a single midpoint on longer turns
+      if(L >= CONNECTOR_MIDPOINT_MIN_NM - 1e-6){
+        const lat = a.lat + (b.lat - a.lat) * 0.5;
+        const lon = a.lon + (b.lon - a.lon) * 0.5;
+        drops.push({ lat, lon, distAlong: globalCum + L/2, leg: legLabel, atWaypoint: null });
+      }
+    }
+
+    globalCum += L;
+    // the leg's end waypoint always gets a drop, even if the final interval is short
+    drops.push({ lat: b.lat, lon: b.lon, distAlong: globalCum, leg: legLabel, atWaypoint: i+2 });
+  }
+  return drops;
+}
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function decToDM(decDeg){
+  const sign = decDeg < 0 ? -1 : 1;
+  const abs = Math.abs(decDeg);
+  let deg = Math.floor(abs);
+  let min = Math.round((abs - deg) * 60);
+  if(min === 60){ min = 0; deg += 1; }
+  return { deg: deg * sign, min };
+}
+
+function formatHeaderDateTime(d){
+  const dateStr = `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  let hh = d.getHours();
+  const ampm = hh >= 12 ? 'PM' : 'AM';
+  hh = hh % 12; if(hh === 0) hh = 12;
+  const mm = String(d.getMinutes()).padStart(2,'0');
+  const ss = String(d.getSeconds()).padStart(2,'0');
+  return { dateStr, timeStr: `${hh}:${mm}:${ss} ${ampm}` };
+}
+
+function formatElapsed(totalHours){
+  const totalMin = Math.max(0, Math.round(totalHours * 60));
+  const hh = Math.floor(totalMin / 60);
+  const mm = totalMin % 60;
+  return `${hh}:${String(mm).padStart(2,'0')}`;
+}
+
+function buildMissionPlanText(p, wps, drops, dep){
+  const now = new Date();
+  const { dateStr, timeStr } = formatHeaderDateTime(now);
+  const stormName = (p.missionId || 'INVEST').trim();
+  const tail = (document.getElementById('aircraftTail').value || 'N49RF').trim();
+  const takeoff = (document.getElementById('takeoffStr').value || '').trim();
+
+  const outHours = dep ? haversineNM(dep[4],dep[5], wps[0].lat, wps[0].lon) / p.tas : 0;
+
+  const BORDER72 = '='.repeat(72);
+  const BORDER40 = '='.repeat(40);
+  const DASH40 = '-'.repeat(40);
+
+  const lines = [];
+  lines.push(BORDER72);
+  lines.push(`HURRICANE SYNOPTIC SURVEILLANCE MISSION PLAN:  ${stormName.padEnd(10)}`);
+  lines.push('');
+  lines.push(`National Hurricane Center:  ${dateStr}  ${timeStr}`);
+  lines.push(`Aircraft:  ${tail.padEnd(30)}Proposed takeoff:  ${takeoff}`);
+  lines.push(BORDER72);
+  lines.push('');
+  lines.push('DROP LOCATIONS');
+  lines.push('');
+  lines.push(BORDER40);
+  lines.push(' #      LAT       LON              TIME ');
+  lines.push('       (d m)     (d m)            (h:mm)');
+  lines.push(DASH40);
+
+  drops.forEach((d, i)=>{
+    const latDM = decToDM(d.lat);
+    const lonDM = decToDM(d.lon);
+    const idxStr = String(i+1).padStart(2,' ');
+    const latDegStr = String(latDM.deg).padStart(2,' ');
+    const latMinStr = String(latDM.min).padStart(2,'0');
+    const lonDegStr = String(lonDM.deg).padStart(3,' ');
+    const lonMinStr = String(lonDM.min).padStart(2,'0');
+    const elapsed = outHours + d.distAlong / p.tas;
+    const timeStr2 = formatElapsed(elapsed);
+    lines.push(`${idxStr}     ${latDegStr} ${latMinStr}     ${lonDegStr} ${lonMinStr}             ${timeStr2}`);
+  });
+
+  lines.push(DASH40);
+  return lines.join('\n');
+}
+
+function downloadMissionPlan(){
+  const text = document.getElementById('missionPlanPreview').value;
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stormSlug = (lastParams ? lastParams.missionId : 'MISSION').trim().replace(/[^A-Za-z0-9]+/g,'_').slice(0,40) || 'MISSION';
+  a.href = url;
+  a.download = `mission_plan_${stormSlug}.txt`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Mission plan downloaded');
+}
+
+function readParams(){
+  const latVal = parseFloat(document.getElementById('latVal').value)||0;
+  const lonVal = parseFloat(document.getElementById('lonVal').value)||0;
+  const latHemi = document.getElementById('latHemi').value;
+  const lonHemi = document.getElementById('lonHemi').value;
+  return {
+    centerLat: latHemi==='N' ? latVal : -latVal,
+    centerLon: lonHemi==='E' ? lonVal : -lonVal,
+    legCount: parseInt(document.getElementById('legCount').value,10),
+    legLength: parseFloat(document.getElementById('legLength').value)||330,
+    legSpacing: parseFloat(document.getElementById('legSpacing').value)||80,
+    orientation: document.getElementById('orientation').value,
+    startCorner: document.getElementById('startCorner').value,
+    tas: parseFloat(document.getElementById('tas').value)||420,
+    dropSpacing: Math.max(70, parseFloat(document.getElementById('dropSpacing').value)||70),
+    missionId: document.getElementById('missionId').value || 'MISSION',
+    depIcao: (document.getElementById('depIcao').value||'').trim().toUpperCase(),
+    arrIcao: (document.getElementById('arrIcao').value||'').trim().toUpperCase()
+  };
+}
+
+let lastWaypoints = [];
+let lastParams = null;
+let lastDrops = [];
+
+function render(){
+  const p = readParams();
+  lastParams = p;
+  const wps = generatePattern(p);
+  lastWaypoints = wps;
+
+  // ---- airports ----
+  const dep = lookupAirport(p.depIcao);
+  const arr = lookupAirport(p.arrIcao);
+  document.getElementById('depName').textContent = dep ? `${dep[1]} — ${dep[2]}, ${dep[3]}` : (p.depIcao ? 'Not in database' : '\u00A0');
+  document.getElementById('arrName').textContent = arr ? `${arr[1]} — ${arr[2]}, ${arr[3]}` : (p.arrIcao ? 'Not in database' : '\u00A0');
+
+  // ---- pattern legs ----
+  let legs = [];
+  for(let i=0;i<wps.length-1;i++){ legs.push(legInfo(wps[i], wps[i+1])); }
+  const patternDist = legs.reduce((s,l)=>s+l.dist,0);
+
+  // ---- dropsonde release points ----
+  const drops = computeDropPoints(wps, p.dropSpacing);
+  lastDrops = drops;
+
+  // ---- transit legs ----
+  const first = wps[0], last = wps[wps.length-1];
+  const outDist = dep ? haversineNM(dep[4],dep[5], first.lat, first.lon) : null;
+  const outCourse = dep ? bearingDeg(dep[4],dep[5], first.lat, first.lon) : null;
+  const backDist = arr ? haversineNM(last.lat, last.lon, arr[4],arr[5]) : null;
+  const backCourse = arr ? bearingDeg(last.lat, last.lon, arr[4],arr[5]) : null;
+
+  const totalMission = (outDist||0) + patternDist + (backDist||0);
+  const hours = totalMission / p.tas;
+  const hh = Math.floor(hours);
+  const mm = Math.round((hours-hh)*60);
+  const overLimit = totalMission > MAX_MISSION_NM;
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat-line"><span class="k">Passes</span><span class="v hl">${p.legCount}</span></div>
+    <div class="stat-line"><span class="k">Waypoints</span><span class="v">${wps.length}</span></div>
+    <div class="stat-line"><span class="k">Dropsondes</span><span class="v hl">${drops.length}</span></div>
+    <div class="stat-line"><span class="k">Pattern distance</span><span class="v">${patternDist.toFixed(0)} NM</span></div>
+    <div class="stat-line"><span class="k">Transit out (${p.depIcao||'—'})</span><span class="v">${outDist!==null ? outDist.toFixed(0)+' NM' : '—'}</span></div>
+    <div class="stat-line"><span class="k">Transit back (${p.arrIcao||'—'})</span><span class="v">${backDist!==null ? backDist.toFixed(0)+' NM' : '—'}</span></div>
+    <div class="stat-line"><span class="k">Total mission distance</span><span class="v ${overLimit?'':'hl'}" style="${overLimit?'color:var(--red);':''}">${totalMission.toFixed(0)} NM</span></div>
+    <div class="stat-line"><span class="k">Est. total flight time</span><span class="v hl">${hh}h ${pad(mm,2)}m</span></div>
+    <div class="stat-line"><span class="k">Center fix</span><span class="v">${dmsDisplay(p.centerLat,true)} ${dmsDisplay(p.centerLon,false)}</span></div>
+  `;
+
+  // ---- alert banner ----
+  const banner = document.getElementById('alertBanner');
+  if(overLimit){
+    const excess = totalMission - MAX_MISSION_NM;
+    const suggestions = [];
+
+    if(p.legCount > 3){
+      const trialTotal = totalMission - (p.legLength + p.legSpacing);
+      suggestions.push(`Drop to <b>3 passes</b> instead of ${p.legCount} — saves ~${(p.legLength+p.legSpacing).toFixed(0)} NM, bringing the mission to about <b>${trialTotal.toFixed(0)} NM</b>${trialTotal<=MAX_MISSION_NM ? ' (within limit)':''}.`);
+    }
+
+    const shrinkPerLeg = excess / p.legCount;
+    const newLegLength = Math.max(20, p.legLength - shrinkPerLeg);
+    suggestions.push(`Shorten each pass to about <b>${newLegLength.toFixed(0)} NM</b> (from ${p.legLength} NM) to absorb the ${excess.toFixed(0)} NM overage at the current pass count.`);
+
+    if(dep || arr){
+      const refLat = p.centerLat, refLon = p.centerLon;
+      const nearby = nearestAirports(refLat, refLon, 6).filter(a => a.icao !== p.depIcao || a.icao !== p.arrIcao);
+      const top = nearby.slice(0,4);
+      const list = top.map(a=>{
+        const trial = a.dist*2 + patternDist;
+        return `<b>${a.icao}</b> (${a.name}, ${a.city} ${a.state}) — ${a.dist.toFixed(0)} NM to center fix, round-trip mission ≈ ${trial.toFixed(0)} NM${trial<=MAX_MISSION_NM?' ✓':''}`;
+      }).join('</li><li>');
+      suggestions.push(`Use a closer departure/arrival base:<ul style="margin-top:6px;"><li>${list}</li></ul>`);
+    }
+
+    suggestions.push(`Split into two shorter missions, or add a fuel stop near the pattern if operationally acceptable.`);
+
+    banner.innerHTML = `
+      <div class="hdr"><span class="dot"></span>MISSION EXCEEDS ${MAX_MISSION_NM.toLocaleString()} NM LIMIT</div>
+      <p>Total mission distance (transit out + pattern + transit back) is <b>${totalMission.toFixed(0)} NM</b> — <b>${excess.toFixed(0)} NM over</b> the ${MAX_MISSION_NM.toLocaleString()} NM limit. Options to bring this within range:</p>
+      <ul><li>${suggestions.join('</li><li>')}</li></ul>
+    `;
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+    banner.innerHTML = '';
+  }
+
+  // ---- waypoint table ----
+  const body = document.getElementById('wpBody');
+  let rows = '';
+  if(dep){
+    rows += `<tr style="background:rgba(232,161,60,0.06);">
+      <td><span class="wpid" style="border-color:var(--amber);color:var(--amber);">D</span></td>
+      <td class="num">${dmsDisplay(dep[4],true)}</td>
+      <td class="num">${dmsDisplay(dep[5],false)}</td>
+      <td>${p.depIcao} — ${dep[1]}</td>
+      <td>${outCourse!==null ? pad(Math.round(outCourse),3)+'°T' : '&mdash;'}</td>
+      <td>${outDist!==null ? outDist.toFixed(1)+' NM' : '&mdash;'}</td>
+    </tr>`;
+  }
+  rows += wps.map((w,i)=>{
+    const next = legs[i];
+    return `<tr>
+      <td><span class="wpid">${i+1}</span></td>
+      <td class="num">${dmsDisplay(w.lat,true)}</td>
+      <td class="num">${dmsDisplay(w.lon,false)}</td>
+      <td>${w.lat.toFixed(4)}, ${w.lon.toFixed(4)}</td>
+      <td>${next ? pad(next.course,3)+'°T' : (arr ? (backCourse!==null?pad(Math.round(backCourse),3)+'°T':'&mdash;') : '&mdash;')}</td>
+      <td>${next ? next.dist.toFixed(1)+' NM' : (arr ? (backDist!==null?backDist.toFixed(1)+' NM':'&mdash;') : '&mdash;')}</td>
+    </tr>`;
+  }).join('');
+  if(arr){
+    rows += `<tr style="background:rgba(232,161,60,0.06);">
+      <td><span class="wpid" style="border-color:var(--amber);color:var(--amber);">A</span></td>
+      <td class="num">${dmsDisplay(arr[4],true)}</td>
+      <td class="num">${dmsDisplay(arr[5],false)}</td>
+      <td>${p.arrIcao} — ${arr[1]}</td>
+      <td>&mdash;</td>
+      <td>&mdash;</td>
+    </tr>`;
+  }
+  body.innerHTML = rows;
+
+  // ---- dropsonde table ----
+  const dropBody = document.getElementById('dropBody');
+  dropBody.innerHTML = drops.map((d,i)=>`<tr${d.atWaypoint?' style="background:rgba(95,212,214,0.05);"':''}>
+      <td><span class="wpid" style="border-color:#f2437a;color:#f2437a;">${i+1}</span></td>
+      <td class="num">${dmsDisplay(d.lat,true)}</td>
+      <td class="num">${dmsDisplay(d.lon,false)}</td>
+      <td>${d.lat.toFixed(4)}, ${d.lon.toFixed(4)}</td>
+      <td>${d.distAlong.toFixed(1)} NM</td>
+      <td>${d.leg}${d.atWaypoint ? ` <span class="num">(= WP${d.atWaypoint})</span>` : ''}</td>
+    </tr>`).join('');
+
+  // ---- exports ----
+  const skyTokens = wps.map(w=>skyvectorToken(w.lat,w.lon));
+  const ffTokens = wps.map(w=>foreflightToken(w.lat,w.lon));
+  const decTokens = wps.map(w=>decimalToken(w.lat,w.lon));
+  if(dep){ skyTokens.unshift(p.depIcao); ffTokens.unshift(p.depIcao); decTokens.unshift(`${p.depIcao} (${dep[4].toFixed(4)}, ${dep[5].toFixed(4)})`); }
+  if(arr){ skyTokens.push(p.arrIcao); ffTokens.push(p.arrIcao); decTokens.push(`${p.arrIcao} (${arr[4].toFixed(4)}, ${arr[5].toFixed(4)})`); }
+  document.getElementById('expSkyvector').value = skyTokens.join(' ');
+  document.getElementById('expForeflight').value = ffTokens.join(' ');
+  document.getElementById('expDecimal').value = decTokens.join('\n');
+  document.getElementById('expDrops').value = drops.map((d,i)=>`SONDE ${pad(i+1,2)}  ${decimalToken(d.lat,d.lon)}`).join('\n');
+
+  document.getElementById('missionPlanPreview').value = buildMissionPlanText(p, wps, drops, dep);
+
+  renderMap(p, wps, drops, dep, arr);
+}
+
+let leafletMap = null;
+let mapLayer = null;
+
+function initLeafletMap(){
+  leafletMap = L.map('leafletMap', { zoomControl:true, attributionControl:true, worldCopyJump:true })
+    .setView([25,-70], 5);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }).addTo(leafletMap);
+  mapLayer = L.layerGroup().addTo(leafletMap);
+}
+
+function renderMap(p, wps, drops, dep, arr){
+  if(!leafletMap) initLeafletMap();
+  mapLayer.clearLayers();
+
+  const bounds = [];
+
+  if(dep){
+    L.polyline([[dep[4],dep[5]], [wps[0].lat, wps[0].lon]],
+      {color:'#e8a13c', weight:2, dashArray:'6,6', opacity:0.85}).addTo(mapLayer);
+    bounds.push([dep[4],dep[5]]);
+    const icon = L.divIcon({className:'', html:'<div class="wp-icon dep">D</div>', iconSize:[22,22], iconAnchor:[11,11]});
+    L.marker([dep[4],dep[5]], {icon})
+      .bindTooltip(`${escapeXml(p.depIcao)} — ${escapeXml(dep[1])}`, {className:'mono-tip'})
+      .addTo(mapLayer);
+  }
+
+  for(let i=0;i<wps.length-1;i++){
+    const a = wps[i], b = wps[i+1];
+    const sameLat = Math.abs(a.lat-b.lat) < 1e-9;
+    const color = sameLat ? '#5fd4d6' : '#e8a13c';
+    L.polyline([[a.lat,a.lon],[b.lat,b.lon]],
+      {color, weight: sameLat?3:2, dashArray: sameLat?null:'5,5', opacity:0.9}).addTo(mapLayer);
+  }
+
+  wps.forEach((w,i)=>{
+    bounds.push([w.lat,w.lon]);
+    const icon = L.divIcon({className:'', html:`<div class="wp-icon">${i+1}</div>`, iconSize:[22,22], iconAnchor:[11,11]});
+    L.marker([w.lat,w.lon], {icon})
+      .bindTooltip(`WP${i+1} — ${dmsDisplay(w.lat,true)} ${dmsDisplay(w.lon,false)}`, {className:'mono-tip'})
+      .addTo(mapLayer);
+  });
+
+  if(arr){
+    const last = wps[wps.length-1];
+    L.polyline([[last.lat,last.lon],[arr[4],arr[5]]],
+      {color:'#e8a13c', weight:2, dashArray:'6,6', opacity:0.85}).addTo(mapLayer);
+    bounds.push([arr[4],arr[5]]);
+    const icon = L.divIcon({className:'', html:'<div class="wp-icon arr">A</div>', iconSize:[22,22], iconAnchor:[11,11]});
+    L.marker([arr[4],arr[5]], {icon})
+      .bindTooltip(`${escapeXml(p.arrIcao)} — ${escapeXml(arr[1])}`, {className:'mono-tip'})
+      .addTo(mapLayer);
+  }
+
+  drops.forEach((d,i)=>{
+    bounds.push([d.lat,d.lon]);
+    L.circleMarker([d.lat,d.lon], {radius:4, color:'#0a1118', weight:1.5, fillColor:'#f2437a', fillOpacity:0.95})
+      .bindTooltip(`Sonde ${i+1} — ${d.distAlong.toFixed(0)} NM along track`, {className:'mono-tip'})
+      .addTo(mapLayer);
+  });
+
+  bounds.push([p.centerLat, p.centerLon]);
+  const centerIcon = L.divIcon({className:'', html:'<div class="center-icon"></div>', iconSize:[16,16], iconAnchor:[8,8]});
+  L.marker([p.centerLat, p.centerLon], {icon:centerIcon})
+    .bindTooltip(escapeXml(p.missionId), {className:'mono-tip'})
+    .addTo(mapLayer);
+
+  if(bounds.length){
+    leafletMap.fitBounds(bounds, {padding:[36,36]});
+  }
+}
+
+function escapeXml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 1600);
+}
+
+function copyField(id){
+  const el = document.getElementById(id);
+  el.select();
+  el.setSelectionRange(0, 999999);
+  let ok = false;
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(el.value);
+      ok = true;
+    }
+  }catch(e){}
+  if(!ok){
+    try{ ok = document.execCommand('copy'); }catch(e){ ok=false; }
+  }
+  showToast(ok ? 'Copied to clipboard' : 'Select + Ctrl/Cmd-C to copy');
+}
+
+function openSkyvector(){
+  if(!lastParams) return;
+  const tokens = lastWaypoints.map(w=>skyvectorToken(w.lat,w.lon));
+  if(lookupAirport(lastParams.depIcao)) tokens.unshift(lastParams.depIcao);
+  if(lookupAirport(lastParams.arrIcao)) tokens.push(lastParams.arrIcao);
+  const route = tokens.join(' ');
+  const ll = `${lastParams.centerLat.toFixed(4)},${lastParams.centerLon.toFixed(4)}`;
+  const url = `https://skyvector.com/?ll=${ll}&chart=301&zoom=6&fpl=${encodeURIComponent(route)}`;
+  window.open(url, '_blank');
+}
+
+function openAWC(){
+  if(!lastParams) return;
+  const ll = `${lastParams.centerLat.toFixed(3)},${lastParams.centerLon.toFixed(3)}`;
+  const url = `https://aviationweather.gov/gfa/?tab=turb&center=${ll}&zoom=6`;
+  window.open(url, '_blank');
+}
+
+document.querySelectorAll('input, select').forEach(el=>{
+  el.addEventListener('input', render);
+  el.addEventListener('change', render);
+});
+
+initAirportList();
+initLeafletMap();
+render();
+</script>
+</body>
+</html>
