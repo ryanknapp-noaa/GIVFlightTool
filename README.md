@@ -2,7 +2,7 @@
 
 A self-contained HTML tool for building NOAA G-IV synoptic surveillance ("lawnmower") flight patterns around a storm fix — computes waypoints and dropsonde release points, plots them on an interactive map, and exports everything to SkyVector, ForeFlight, AWC, and a printable NHC-style mission plan.
 
-**File:** `g4_lawnmower_planner.html` — open it directly in any modern browser (Chrome, Edge, Firefox, Safari). No install, no server.
+**File:** `index.html` — open it directly in any modern browser (Chrome, Edge, Firefox, Safari). No install, no server.
 
 > Requires an internet connection. Map tiles (Leaflet/CARTO) and fonts (Google Fonts) load from public CDNs at runtime — the tool will still calculate everything offline, but the map and fonts won't render without a connection.
 
