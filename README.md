@@ -1,4 +1,4 @@
-# G-IV Lawnmower Pattern Planner
+# G-IV Pattern Planner
 
 A self-contained HTML tool for building NOAA G-IV synoptic surveillance ("lawnmower") flight patterns around a storm fix — computes waypoints and dropsonde release points, plots them on an interactive map, and exports everything to SkyVector, ForeFlight, AWC, and a printable NHC-style mission plan.
 
