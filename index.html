@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>G-IV Pattern Planner</title>
+<title>G-IV Lawnmower Pattern Planner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -212,7 +212,7 @@
 
   <header>
     <div class="title-block">
-      <h1>G-IV PATTERN PLANNER</h1>
+      <h1>G-IV LAWNMOWER PATTERN PLANNER</h1>
       <div class="sub">NOAA / AOC &middot; High-Altitude Recon &middot; Dropsonde Survey Grid</div>
     </div>
     <div class="tag">
@@ -324,9 +324,9 @@
       <div class="divider"></div>
 
       <div class="field">
-        <label>Dropsonde Spacing (NM, min 70)</label>
-        <input type="number" id="dropSpacing" value="70" step="5" min="70">
-        <div class="hint">Every waypoint is a drop point. Passes divide evenly (no leftover under 70 NM); turns get endpoints only unless ≥110 NM, then one midpoint.</div>
+        <label>Dropsonde Spacing (70&ndash;109 NM)</label>
+        <input type="number" id="dropSpacing" value="70" step="5" min="70" max="109">
+        <div class="hint">Every waypoint is a drop point. Every leg is split evenly into segments of 70&ndash;109 NM &mdash; recalculated automatically if you drag a waypoint.</div>
       </div>
 
       <div class="divider"></div>
@@ -337,6 +337,14 @@
 
     <!-- MAIN DISPLAY -->
     <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:12px;flex-wrap:wrap;">
+        <div class="hint" style="margin:0;">Drag any numbered waypoint marker to reshape that leg — drop points regenerate automatically, always 70&ndash;109 NM apart.</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span id="manualEditBadge" style="display:none;font-size:10px;letter-spacing:1px;color:var(--amber);text-transform:uppercase;">&#9679; manually edited</span>
+          <button class="ghost" style="flex:none;" onclick="resetManualWaypoints()">Reset Pattern</button>
+        </div>
+      </div>
+
       <div class="mapbox" style="position:relative;">
         <div id="leafletMap"></div>
         <div class="legend-box">
@@ -399,12 +407,12 @@
         </div>
 
         <div class="exp-card">
-          <h3>Dropsonde List <span class="badge">DECIMAL</span></h3>
+          <h3>Dropsonde List <span class="badge">D M</span></h3>
           <textarea id="expDrops" readonly></textarea>
           <div class="btnrow">
             <button class="primary" onclick="copyField('expDrops')">Copy List</button>
           </div>
-          <div class="exp-note">Every pattern waypoint doubles as a release point; excludes transit to/from the departure and arrival airports.</div>
+          <div class="exp-note">Degrees/minutes, fixed-width columns (# / lat / lon). Every pattern waypoint doubles as a release point; excludes transit to/from the departure and arrival airports.</div>
         </div>
       </div>
 
@@ -846,21 +854,32 @@ function generatePattern(p){
 }
 
 function legInfo(a,b){
-  // all legs are cardinal by construction
-  if(Math.abs(a.lat-b.lat) < 1e-9){
-    const dist = Math.abs(b.lon-a.lon) * Math.cos(a.lat*RAD) * 60;
-    const course = b.lon>a.lon ? 90 : 270;
-    return {dist, course};
-  } else {
-    const dist = Math.abs(b.lat-a.lat) * 60;
-    const course = b.lat>a.lat ? 0 : 180;
-    return {dist, course};
-  }
+  // generic great-circle distance/course - legs are cardinal by construction
+  // when generated, but waypoints can be dragged off-axis, so this must not
+  // assume a fixed latitude or longitude between the two points
+  const dist = haversineNM(a.lat, a.lon, b.lat, b.lon);
+  const course = bearingDeg(a.lat, a.lon, b.lat, b.lon);
+  return { dist, course };
 }
 
-const CONNECTOR_MIDPOINT_MIN_NM = 110;
+const DROP_MAX_NM = 109;
+
+// Finds how many equal segments a leg of length L should be split into so
+// that every segment falls within [minNM, maxNM]. Starts from the fewest
+// segments that satisfy the upper bound, then backs off only if that
+// violates the lower bound (there's a narrow band - roughly maxNM to 2*minNM -
+// where no segment count can satisfy both exactly; in that case a single
+// longer-than-ideal segment is preferred over any segment shorter than minNM).
+function computeSegmentCount(L, minNM, maxNM){
+  let n = Math.max(1, Math.ceil(L / maxNM));
+  while(n > 1 && (L / n) < minNM - 1e-6){
+    n -= 1;
+  }
+  return n;
+}
 
 function computeDropPoints(wps, spacingNM){
+  const minNM = spacingNM;
   const drops = [];
   drops.push({ lat: wps[0].lat, lon: wps[0].lon, distAlong: 0, leg: 'WP1', atWaypoint: 1 });
 
@@ -870,35 +889,20 @@ function computeDropPoints(wps, spacingNM){
     const info = legInfo(a,b);
     const L = info.dist;
     const legLabel = `WP${i+1}→WP${i+2}`;
-    // the lawnmower pattern always alternates pass, connector, pass, connector...
-    // starting with a pass leg, so even leg index = pass (long), odd = connector (short/turn)
-    const isPassLeg = (i % 2 === 0);
 
-    if(isPassLeg){
-      // long pass leg: divide evenly into the most segments possible while
-      // keeping every segment >= spacingNM - never a short leftover at the end
-      const segments = Math.max(1, Math.floor(L / spacingNM));
-      if(segments > 1){
-        const evenSpacing = L / segments;
-        for(let j=1;j<segments;j++){
-          const f = (evenSpacing * j) / L;
-          const lat = a.lat + (b.lat - a.lat) * f;
-          const lon = a.lon + (b.lon - a.lon) * f;
-          drops.push({ lat, lon, distAlong: globalCum + evenSpacing * j, leg: legLabel, atWaypoint: null });
-        }
-      }
-    } else {
-      // short connector/turn leg: endpoints already satisfy >=70nm spacing on their own
-      // once the leg is long enough; only add a single midpoint on longer turns
-      if(L >= CONNECTOR_MIDPOINT_MIN_NM - 1e-6){
-        const lat = a.lat + (b.lat - a.lat) * 0.5;
-        const lon = a.lon + (b.lon - a.lon) * 0.5;
-        drops.push({ lat, lon, distAlong: globalCum + L/2, leg: legLabel, atWaypoint: null });
-      }
+    // every leg - pass, connector, or freely dragged - is split into equal
+    // segments that stay within [minNM, DROP_MAX_NM] wherever mathematically possible
+    const n = computeSegmentCount(L, minNM, DROP_MAX_NM);
+    const seg = L / n;
+    for(let j=1;j<n;j++){
+      const f = j / n;
+      const lat = a.lat + (b.lat - a.lat) * f;
+      const lon = a.lon + (b.lon - a.lon) * f;
+      drops.push({ lat, lon, distAlong: globalCum + seg * j, leg: legLabel, atWaypoint: null });
     }
 
     globalCum += L;
-    // the leg's end waypoint always gets a drop, even if the final interval is short
+    // the leg's end waypoint always gets a drop
     drops.push({ lat: b.lat, lon: b.lon, distAlong: globalCum, leg: legLabel, atWaypoint: i+2 });
   }
   return drops;
@@ -1006,7 +1010,7 @@ function readParams(){
     orientation: document.getElementById('orientation').value,
     startCorner: document.getElementById('startCorner').value,
     tas: parseFloat(document.getElementById('tas').value)||420,
-    dropSpacing: Math.max(70, parseFloat(document.getElementById('dropSpacing').value)||70),
+    dropSpacing: Math.min(109, Math.max(70, parseFloat(document.getElementById('dropSpacing').value)||70)),
     missionId: document.getElementById('missionId').value || 'MISSION',
     depIcao: (document.getElementById('depIcao').value||'').trim().toUpperCase(),
     arrIcao: (document.getElementById('arrIcao').value||'').trim().toUpperCase()
@@ -1016,12 +1020,38 @@ function readParams(){
 let lastWaypoints = [];
 let lastParams = null;
 let lastDrops = [];
+let manualWaypoints = null;   // set once the user drags a waypoint; overrides generatePattern()
+let lastPatternSignature = null;
+
+function patternSignature(p){
+  return JSON.stringify([p.centerLat, p.centerLon, p.legCount, p.legLength, p.legSpacing, p.orientation, p.startCorner]);
+}
+
+function resetManualWaypoints(){
+  manualWaypoints = null;
+  render();
+  showToast('Pattern reset to calculated positions');
+}
+
+function onWaypointDragEnd(index, newLat, newLon){
+  const base = manualWaypoints ? manualWaypoints : lastWaypoints.map(w=>({ lat: w.lat, lon: w.lon }));
+  base[index] = { lat: newLat, lon: newLon };
+  manualWaypoints = base;
+  render();
+}
 
 function render(){
   const p = readParams();
   lastParams = p;
-  const wps = generatePattern(p);
+
+  const sig = patternSignature(p);
+  if(sig !== lastPatternSignature){
+    manualWaypoints = null; // a pattern parameter changed - discard any manual drag edits
+    lastPatternSignature = sig;
+  }
+  const wps = manualWaypoints ? manualWaypoints : generatePattern(p);
   lastWaypoints = wps;
+  document.getElementById('manualEditBadge').style.display = manualWaypoints ? 'inline' : 'none';
 
   // ---- airports ----
   const dep = lookupAirport(p.depIcao);
@@ -1158,7 +1188,16 @@ function render(){
   document.getElementById('expSkyvector').value = skyTokens.join(' ');
   document.getElementById('expForeflight').value = ffTokens.join(' ');
   document.getElementById('expDecimal').value = decTokens.join('\n');
-  document.getElementById('expDrops').value = drops.map((d,i)=>`SONDE ${pad(i+1,2)}  ${decimalToken(d.lat,d.lon)}`).join('\n');
+  document.getElementById('expDrops').value = drops.map((d,i)=>{
+    const latDM = decToDM(d.lat);
+    const lonDM = decToDM(d.lon);
+    const idxStr = String(i+1).padStart(2,' ');
+    const latDegStr = String(latDM.deg).padStart(2,' ');
+    const latMinStr = String(latDM.min).padStart(2,'0');
+    const lonDegStr = String(lonDM.deg).padStart(3,' ');
+    const lonMinStr = String(lonDM.min).padStart(2,'0');
+    return `${idxStr}     ${latDegStr} ${latMinStr}     ${lonDegStr} ${lonMinStr}`;
+  }).join('\n');
 
   document.getElementById('missionPlanPreview').value = buildMissionPlanText(p, wps, drops, dep);
 
@@ -1184,9 +1223,12 @@ function renderMap(p, wps, drops, dep, arr){
   mapLayer.clearLayers();
 
   const bounds = [];
+  let depLine = null;
+  let arrLine = null;
+  const legLines = []; // legLines[i] = polyline between wps[i] and wps[i+1]
 
   if(dep){
-    L.polyline([[dep[4],dep[5]], [wps[0].lat, wps[0].lon]],
+    depLine = L.polyline([[dep[4],dep[5]], [wps[0].lat, wps[0].lon]],
       {color:'#e8a13c', weight:2, dashArray:'6,6', opacity:0.85}).addTo(mapLayer);
     bounds.push([dep[4],dep[5]]);
     const icon = L.divIcon({className:'', html:'<div class="wp-icon dep">D</div>', iconSize:[22,22], iconAnchor:[11,11]});
@@ -1199,21 +1241,14 @@ function renderMap(p, wps, drops, dep, arr){
     const a = wps[i], b = wps[i+1];
     const sameLat = Math.abs(a.lat-b.lat) < 1e-9;
     const color = sameLat ? '#5fd4d6' : '#e8a13c';
-    L.polyline([[a.lat,a.lon],[b.lat,b.lon]],
+    const line = L.polyline([[a.lat,a.lon],[b.lat,b.lon]],
       {color, weight: sameLat?3:2, dashArray: sameLat?null:'5,5', opacity:0.9}).addTo(mapLayer);
+    legLines.push(line);
   }
-
-  wps.forEach((w,i)=>{
-    bounds.push([w.lat,w.lon]);
-    const icon = L.divIcon({className:'', html:`<div class="wp-icon">${i+1}</div>`, iconSize:[22,22], iconAnchor:[11,11]});
-    L.marker([w.lat,w.lon], {icon})
-      .bindTooltip(`WP${i+1} — ${dmsDisplay(w.lat,true)} ${dmsDisplay(w.lon,false)}`, {className:'mono-tip'})
-      .addTo(mapLayer);
-  });
 
   if(arr){
     const last = wps[wps.length-1];
-    L.polyline([[last.lat,last.lon],[arr[4],arr[5]]],
+    arrLine = L.polyline([[last.lat,last.lon],[arr[4],arr[5]]],
       {color:'#e8a13c', weight:2, dashArray:'6,6', opacity:0.85}).addTo(mapLayer);
     bounds.push([arr[4],arr[5]]);
     const icon = L.divIcon({className:'', html:'<div class="wp-icon arr">A</div>', iconSize:[22,22], iconAnchor:[11,11]});
@@ -1221,6 +1256,30 @@ function renderMap(p, wps, drops, dep, arr){
       .bindTooltip(`${escapeXml(p.arrIcao)} — ${escapeXml(arr[1])}`, {className:'mono-tip'})
       .addTo(mapLayer);
   }
+
+  wps.forEach((w,i)=>{
+    bounds.push([w.lat,w.lon]);
+    const icon = L.divIcon({className:'', html:`<div class="wp-icon">${i+1}</div>`, iconSize:[22,22], iconAnchor:[11,11]});
+    const marker = L.marker([w.lat,w.lon], {icon, draggable:true});
+
+    // live visual feedback: only move the connected line(s) while dragging, no recompute
+    marker.on('drag', (e)=>{
+      const ll = e.target.getLatLng();
+      if(i === 0 && depLine) depLine.setLatLngs([[dep[4],dep[5]], [ll.lat, ll.lng]]);
+      if(i > 0 && legLines[i-1]) legLines[i-1].setLatLngs([[wps[i-1].lat, wps[i-1].lon], [ll.lat, ll.lng]]);
+      if(i < legLines.length) legLines[i].setLatLngs([[ll.lat, ll.lng], [wps[i+1].lat, wps[i+1].lon]]);
+      if(i === wps.length-1 && arrLine) arrLine.setLatLngs([[ll.lat, ll.lng], [arr[4],arr[5]]]);
+    });
+
+    // on release: commit the new position and fully recompute drops/tables/exports
+    marker.on('dragend', (e)=>{
+      const ll = e.target.getLatLng();
+      onWaypointDragEnd(i, ll.lat, ll.lng);
+    });
+
+    marker.bindTooltip(`WP${i+1} — ${dmsDisplay(w.lat,true)} ${dmsDisplay(w.lon,false)} (drag to reshape)`, {className:'mono-tip'})
+      .addTo(mapLayer);
+  });
 
   drops.forEach((d,i)=>{
     bounds.push([d.lat,d.lon]);
