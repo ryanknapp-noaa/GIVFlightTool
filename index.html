@@ -166,9 +166,10 @@
     color:var(--cyan);font-size:10px;font-weight:600;
   }
 
-  .exports{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px;margin-top:18px;}
-  @media (max-width:1500px){.exports{grid-template-columns:1fr 1fr;}}
-  @media (max-width:700px){.exports{grid-template-columns:1fr;}}
+  .exports{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:18px;}
+  @media (max-width:1700px){.exports{grid-template-columns:repeat(3,1fr);}}
+  @media (max-width:1100px){.exports{grid-template-columns:1fr 1fr;} .exp-card.wide{grid-column:span 2;}}
+  @media (max-width:700px){.exports{grid-template-columns:1fr;} .exp-card.wide{grid-column:auto;}}
   .exp-card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:14px;}
   .exp-card h3{
     font-family:'Space Grotesk',sans-serif;font-size:12px;letter-spacing:1px;
@@ -416,6 +417,16 @@
             <button class="primary" onclick="copyField('expDrops')">Copy List</button>
           </div>
           <div class="exp-note">Degrees/minutes, fixed-width columns (# / lat / lon). Every pattern waypoint doubles as a release point; excludes transit to/from the departure and arrival airports.</div>
+        </div>
+
+        <div class="exp-card wide">
+          <h3>NASA MTS <span class="badge">KML</span></h3>
+          <textarea id="expKml" readonly></textarea>
+          <div class="btnrow">
+            <button class="primary" onclick="downloadKML()">Download .kml</button>
+            <button onclick="copyField('expKml')">Copy KML</button>
+          </div>
+          <div class="exp-note">Full route (departure &rarr; pattern &rarr; arrival) as a line, plus waypoint and dropsonde placemarks with elapsed drop times. Drag the .kml onto the MTS map or add it as a KML layer. Also opens in Google Earth.</div>
         </div>
       </div>
 
@@ -1005,6 +1016,121 @@ function downloadMissionPlan(){
   showToast('Mission plan downloaded');
 }
 
+// ---------------------------------------------------------------------------
+// KML EXPORT (NASA Mission Tools Suite / Google Earth)
+// Lines are densified with the same linear lat/lon interpolation the planner
+// uses for its map and drop points, so the track lands on every drop exactly
+// regardless of whether the viewer draws segments as great circles or straight.
+// ---------------------------------------------------------------------------
+function kmlEsc(v){
+  return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+}
+function kmlCoord(lat, lon){ return `${lon.toFixed(5)},${lat.toFixed(5)},0`; }
+function kmlDensify(pts, stepNM){
+  const out = [];
+  for(let i=0;i<pts.length;i++){
+    const a = pts[i];
+    if(i===0){ out.push(a); continue; }
+    const prev = pts[i-1];
+    const d = haversineNM(prev.lat, prev.lon, a.lat, a.lon);
+    const n = Math.max(1, Math.ceil(d / stepNM));
+    for(let j=1;j<=n;j++){
+      const f = j / n;
+      out.push({ lat: prev.lat + (a.lat - prev.lat) * f, lon: prev.lon + (a.lon - prev.lon) * f });
+    }
+  }
+  return out;
+}
+function dmText(dec, isLat){
+  const dm = decToDM(dec);
+  const hemi = isLat ? (dec>=0?'N':'S') : (dec>=0?'E':'W');
+  return `${dm.deg}°${String(dm.min).padStart(2,'0')}'${hemi}`;
+}
+
+function buildKML(p, wps, drops, dep, arr){
+  const mission = (p.missionId || 'MISSION').trim();
+  const tail = (document.getElementById('aircraftTail').value || 'N49RF').trim();
+  const takeoff = (document.getElementById('takeoffStr').value || '').trim();
+  const outHours = dep ? haversineNM(dep[4],dep[5], wps[0].lat, wps[0].lon) / p.tas : 0;
+
+  // full route: dep -> pattern -> arr
+  const route = [];
+  if(dep) route.push({ lat: dep[4], lon: dep[5] });
+  wps.forEach(w=>route.push({ lat: w.lat, lon: w.lon }));
+  if(arr) route.push({ lat: arr[4], lon: arr[5] });
+  const routeCoords = kmlDensify(route, 10).map(c=>kmlCoord(c.lat,c.lon)).join(' ');
+
+  let patternDist = 0;
+  for(let i=0;i<wps.length-1;i++) patternDist += legInfo(wps[i], wps[i+1]).dist;
+  const outDist = dep ? haversineNM(dep[4],dep[5], wps[0].lat, wps[0].lon) : 0;
+  const backDist = arr ? haversineNM(wps[wps.length-1].lat, wps[wps.length-1].lon, arr[4],arr[5]) : 0;
+  const total = outDist + patternDist + backDist;
+
+  const L = [];
+  L.push('<?xml version="1.0" encoding="UTF-8"?>');
+  L.push('<kml xmlns="http://www.opengis.net/kml/2.2">');
+  L.push('<Document>');
+  L.push(`  <name>${kmlEsc(mission)} - ${kmlEsc(tail)} Flight Plan</name>`);
+  L.push(`  <description>${kmlEsc(`G-IV synoptic surveillance pattern. Aircraft ${tail}. Proposed takeoff ${takeoff || 'TBD'}. ${wps.length} waypoints, ${drops.length} dropsondes, ${total.toFixed(0)} NM total at ${p.tas} kt TAS. Generated ${new Date().toISOString().slice(0,16).replace('T',' ')}Z.`)}</description>`);
+  // styles (KML colors are aabbggrr)
+  L.push('  <Style id="route"><LineStyle><color>ffd6d45f</color><width>3</width></LineStyle></Style>');
+  L.push('  <Style id="wp"><IconStyle><color>ffd6d45f</color><scale>0.9</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/placemark_circle.png</href></Icon></IconStyle><LabelStyle><color>ffd6d45f</color><scale>0.8</scale></LabelStyle></Style>');
+  L.push('  <Style id="drop"><IconStyle><color>ff7a43f2</color><scale>0.7</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/triangle.png</href></Icon></IconStyle><LabelStyle><color>ff7a43f2</color><scale>0.7</scale></LabelStyle></Style>');
+  L.push('  <Style id="apt"><IconStyle><color>ff3ca1e8</color><scale>1.0</scale><Icon><href>http://maps.google.com/mapfiles/kml/shapes/airports.png</href></Icon></IconStyle><LabelStyle><color>ff3ca1e8</color></LabelStyle></Style>');
+
+  // route line
+  L.push('  <Placemark>');
+  L.push(`    <name>${kmlEsc(mission)} Route</name>`);
+  L.push(`    <description>${kmlEsc([p.depIcao && dep ? p.depIcao : null, ...wps.map((_,i)=>'WP'+(i+1)), p.arrIcao && arr ? p.arrIcao : null].filter(Boolean).join(' - '))}</description>`);
+  L.push('    <styleUrl>#route</styleUrl>');
+  L.push('    <LineString><tessellate>1</tessellate><altitudeMode>clampToGround</altitudeMode>');
+  L.push(`      <coordinates>${routeCoords}</coordinates>`);
+  L.push('    </LineString>');
+  L.push('  </Placemark>');
+
+  // waypoints + airports
+  L.push('  <Folder><name>Waypoints</name>');
+  if(dep){
+    L.push(`    <Placemark><name>${kmlEsc(p.depIcao)}</name><description>${kmlEsc(`Departure: ${dep[1]}, ${dep[2]} ${dep[3]}`)}</description><styleUrl>#apt</styleUrl><Point><coordinates>${kmlCoord(dep[4],dep[5])}</coordinates></Point></Placemark>`);
+  }
+  wps.forEach((w,i)=>{
+    L.push(`    <Placemark><name>WP${i+1}</name><description>${kmlEsc(`${dmText(w.lat,true)} ${dmText(w.lon,false)} (${w.lat.toFixed(4)}, ${w.lon.toFixed(4)})`)}</description><styleUrl>#wp</styleUrl><Point><coordinates>${kmlCoord(w.lat,w.lon)}</coordinates></Point></Placemark>`);
+  });
+  if(arr){
+    L.push(`    <Placemark><name>${kmlEsc(p.arrIcao)}</name><description>${kmlEsc(`Arrival: ${arr[1]}, ${arr[2]} ${arr[3]}`)}</description><styleUrl>#apt</styleUrl><Point><coordinates>${kmlCoord(arr[4],arr[5])}</coordinates></Point></Placemark>`);
+  }
+  L.push('  </Folder>');
+
+  // dropsondes
+  L.push('  <Folder><name>Dropsondes</name>');
+  drops.forEach((d,i)=>{
+    const t = formatElapsed(outHours + d.distAlong / p.tas);
+    const desc = `Sonde ${i+1} - ${dmText(d.lat,true)} ${dmText(d.lon,false)} (${d.lat.toFixed(4)}, ${d.lon.toFixed(4)}) - T+${t} from takeoff - ${d.leg}${d.atWaypoint?` (= WP${d.atWaypoint})`:''}`;
+    L.push(`    <Placemark><name>S${i+1}</name><description>${kmlEsc(desc)}</description><styleUrl>#drop</styleUrl><Point><coordinates>${kmlCoord(d.lat,d.lon)}</coordinates></Point></Placemark>`);
+  });
+  L.push('  </Folder>');
+
+  L.push('</Document>');
+  L.push('</kml>');
+  return L.join('\n');
+}
+
+function downloadKML(){
+  if(!lastParams) return;
+  const text = document.getElementById('expKml').value;
+  const blob = new Blob([text], { type: 'application/vnd.google-earth.kml+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const slug = (lastParams.missionId || 'MISSION').trim().replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,40) || 'MISSION';
+  a.href = url;
+  a.download = `flight_plan_${slug}.kml`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('KML flight plan downloaded');
+}
+
 function readParams(){
   const latVal = parseFloat(document.getElementById('latVal').value)||0;
   const lonVal = parseFloat(document.getElementById('lonVal').value)||0;
@@ -1209,6 +1335,7 @@ function render(){
   }).join('\n');
 
   document.getElementById('missionPlanPreview').value = buildMissionPlanText(p, wps, drops, dep);
+  document.getElementById('expKml').value = buildKML(p, wps, drops, dep, arr);
 
   renderMap(p, wps, drops, dep, arr);
 }
